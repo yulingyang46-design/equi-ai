@@ -4,7 +4,8 @@
   "private": true,
   "description": "EquiAI personal equestrian video learning app",
   "scripts": {
-    "build": "node scripts/copy-web.mjs"
+    "build": "node scripts/copy-web.mjs",
+    "check": "node --check src/app.js && node --check src/modules/storage-v2.js && node --check src/modules/subtitles.js && node --check src/modules/ai-client.js && node --check server/index.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
