@@ -38,13 +38,32 @@ export async function saveMedia(file,meta={}){
 }
 export async function mediaBlob(id){const item=await get("media",id);return item?.blob||null;}
 export async function deleteMedia(id){return remove("media",id);}
+async function readLegacyVideo(id){
+  if(!id)return null;
+  let db;
+  try{
+    db=await new Promise((resolve,reject)=>{
+      const req=indexedDB.open("EquiAI-media");
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error);
+    });
+    if(!db.objectStoreNames.contains("videos"))return null;
+    const item=await request(db.transaction("videos","readonly").objectStore("videos").get(id));
+    return item?.blob||null;
+  }catch{return null;}finally{db?.close();}
+}
 export async function migrateLegacy(){
   const marker=await get("settings","legacy-migrated");if(marker)return 0;
   let old=[];try{old=JSON.parse(localStorage.getItem("equiAI_v1")||"[]");}catch{}
   let count=0;
   if(Array.isArray(old)) for(const r of old){
     if(!r||typeof r.title!=="string")continue;
-    await put("records",{id:r.id||"legacy-"+Date.now()+"-"+count,title:r.title,url:r.url||"",category:r.category||"其他",language:r.language||"暂不确定",status:r.status||"待学习",notes:r.notes||"",created:r.created||new Date().toISOString(),mediaId:r.localVideoId||"",transcript:"",sourceType:r.localVideoId?"local":"link",updatedAt:new Date().toISOString()});count++;
+    let mediaId="";
+    if(r.localVideoId){
+      const blob=await readLegacyVideo(r.localVideoId);
+      if(blob){mediaId=r.localVideoId;await put("media",{id:mediaId,blob,name:"legacy-video",type:blob.type||"video/mp4",size:blob.size||0,savedAt:new Date().toISOString()});}
+    }
+    await put("records",{id:r.id||"legacy-"+Date.now()+"-"+count,title:r.title,url:r.url||"",category:r.category||"其他",language:r.language||"暂不确定",status:r.status||"待学习",notes:r.notes||"",created:r.created||new Date().toISOString(),mediaId,legacyVideoMissing:Boolean(r.localVideoId&&!mediaId),transcript:"",sourceType:r.localVideoId?"local":"link",updatedAt:new Date().toISOString()});count++;
   }
   await put("settings",{id:"legacy-migrated",value:true,at:new Date().toISOString()});
   return count;
