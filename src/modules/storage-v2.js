@@ -74,7 +74,17 @@ export async function exportAll(){
 }
 export async function importAll(data){
   let n=0;
-  for(const r of (data.records||[])){if(r&&typeof r.title==="string"){await put("records",{...r,id:r.id||"import-"+Date.now()+"-"+n});n++;}}
-  for(const k of (data.knowledge||[])){if(k&&typeof k.title==="string")await put("knowledge",k);}
+  for(const r of (data.records||[])){
+    if(!r||typeof r.title!=="string")continue;
+    const mediaMissing=Boolean(r.mediaId||r.localVideoId);
+    await put("records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId:"",legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()});
+    n++;
+  }
+  let kCount=0;
+  for(const k of (data.knowledge||[])){
+    if(!k||typeof k.title!=="string")continue;
+    await put("knowledge",{...k,id:"import-k-"+Date.now().toString(36)+"-"+kCount+"-"+Math.random().toString(36).slice(2,6)});
+    kCount++;
+  }
   return n;
 }
