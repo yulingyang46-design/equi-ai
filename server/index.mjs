@@ -25,6 +25,7 @@ For R entries, match R22 practical depth: 适用对象; 核心宗旨; 前置硬�
 For horse health, medication, lameness and riding safety, state evidence limits and risks; never present model output as diagnosis or treatment instructions.`;
 function client(){if(!process.env.GEMINI_API_KEY)throw new Error("服务端尚未配置 GEMINI_API_KEY。");return new GoogleGenAI({apiKey:process.env.GEMINI_API_KEY});}
 app.use("/api", (req,res,next)=>{
+  if(req.path==="/health")return next();
   const expected=process.env.APP_ACCESS_TOKEN;
   if(!expected)return res.status(503).json({error:"服务端尚未配置 APP_ACCESS_TOKEN。"});
   const supplied=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
