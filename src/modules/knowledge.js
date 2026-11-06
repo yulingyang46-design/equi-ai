@@ -6,4 +6,4 @@ export const EQUINE_SYSTEM_PROMPT=`你是严谨的马术教学资料整理助手
 4. 内容必须可执行，尽量提供动作、频率、数值、判断标准和检查点；不能确定的数值不要猜。
 5. 涉及马匹健康、药物、跛行、训练负荷和骑乘安全时，明确证据边界和风险，不给出未经证实的诊断或治疗剂量。
 6. 若生成知识库条目，优先沿用用户指定的原编号和结构；没有提供结构时，先询问或使用清晰的标题、定义、适用场景、操作要点、注意事项、关联词条。`;
-export function buildKnowledgePrompt(source,category="其他"){return EQUINE_SYSTEM_PROMPT+"\\n\\n请将以下资料整理为「"+category+"」知识条目，保留原始信息并列出待核实点：\\n"+source;}
+export function buildKnowledgePrompt(source,category="其他"){return EQUINE_SYSTEM_PROMPT+"\n\n请将以下资料整理为「"+category+"」知识条目，保留原始信息并列出待核实点：\n"+source;}
