@@ -38,6 +38,19 @@ app.post("/api/analyze",async(req,res)=>{
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze:",e);res.status(502).json({error:e.message||"AI 分析失败，请稍后重试。"});}
 });
+app.post("/api/analyze-url",async(req,res)=>{
+  try{
+    const {url="",task="分析该马术视频来源页面",context=""}=req.body||{};
+    let parsed;try{parsed=new URL(url);}catch{return res.status(400).json({error:"视频链接格式无效。"});}
+    if(!["http:","https:"].includes(parsed.protocol))return res.status(400).json({error:"仅支持 HTTP 或 HTTPS 链接。"});
+    const result=await client().models.generateContent({
+      model:process.env.GEMINI_MODEL||"gemini-3.8-flash",
+      contents:system+"\\n\\n请尝试读取下方公开视频页面可访问的文字、说明和字幕线索，并完成任务："+task+"。背景："+context+"。如果无法读取视频画面或完整字幕，必须明确说明，不得假装看过视频。\\n来源链接："+parsed.href,
+      config:{tools:[{urlContext:{}}]}
+    });
+    res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
+  }catch(e){console.error("analyze-url:",e);res.status(502).json({error:e.message||"视频链接分析失败。"});}
+});
 app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   const file=req.file;
   if(!file)return res.status(400).json({error:"没有收到视频文件。"});
