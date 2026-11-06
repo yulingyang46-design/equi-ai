@@ -24,7 +24,7 @@ function client(){if(!process.env.GEMINI_API_KEY)throw new Error("服务端尚�
 app.use("/api", (req,res,next)=>{
   const expected=process.env.APP_ACCESS_TOKEN;
   if(!expected)return res.status(503).json({error:"服务端尚未配置 APP_ACCESS_TOKEN。"});
-  const supplied=String(req.headers.authorization||"").replace(/^Bearer\\s+/i,"");
+  const supplied=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
   if(supplied!==expected)return res.status(401).json({error:"访问令牌无效，请检查应用设置。"});
   next();
 });
