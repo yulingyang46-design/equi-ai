@@ -2,7 +2,7 @@ name: Build EquiAI Android APK
 
 on:
   push:
-    branches: [android-apk]
+    branches: [android-apk, android-v2-complete]
   workflow_dispatch:
 
 permissions:
