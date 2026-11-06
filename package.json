@@ -2,13 +2,14 @@
   "name": "equiai-android",
   "version": "0.1.0",
   "private": true,
-  "description": "EquiAI personal Android app",
+  "description": "EquiAI personal app for Android and iOS",
   "scripts": {
     "build": "node scripts/copy-web.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
-    "@capacitor/core": "^7.4.3"
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/ios": "^7.4.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.4.3"
