@@ -45,7 +45,7 @@ app.post("/api/analyze-url",async(req,res)=>{
     if(!["http:","https:"].includes(parsed.protocol))return res.status(400).json({error:"仅支持 HTTP 或 HTTPS 链接。"});
     const result=await client().models.generateContent({
       model:process.env.GEMINI_MODEL||"gemini-3.8-flash",
-      contents:system+"\\n\\n请尝试读取下方公开视频页面可访问的文字、说明和字幕线索，并完成任务："+task+"。背景："+context+"。如果无法读取视频画面或完整字幕，必须明确说明，不得假装看过视频。\\n来源链接："+parsed.href,
+      contents:system+"\n\n请尝试读取下方公开视频页面可访问的文字、说明和字幕线索，并完成任务："+task+"。背景："+context+"。如果无法读取视频画面或完整字幕，必须明确说明，不得假装看过视频。\n来源链接："+parsed.href,
       config:{tools:[{urlContext:{}}]}
     });
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
@@ -54,10 +54,11 @@ app.post("/api/analyze-url",async(req,res)=>{
 app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   const file=req.file;
   if(!file)return res.status(400).json({error:"没有收到视频文件。"});
+  let ai, remote;
   try{
-    const ai=client();
+    ai=client();
     const mime=req.file.mimetype||"video/mp4";
-    let remote=await ai.files.upload({file:file.path,config:{mimeType:mime}});
+    remote=await ai.files.upload({file:file.path,config:{mimeType:mime}});
     for(let i=0;i<60&&String(remote.state)!=="ACTIVE";i++){
       if(String(remote.state)==="FAILED")throw new Error(remote.error?.message||"Gemini 视频预处理失败。");
       await new Promise(r=>setTimeout(r,5000));
@@ -69,6 +70,6 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
     const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请按时间顺序整理：画面内容、骑手动作、马匹反应、教学要点、可能错误、纠正建议、无法确认之处。不要臆测画面看不清的细节。"])});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze-video:",e);res.status(502).json({error:e.message||"视频分析失败。"});}
-  finally{await fs.unlink(file.path).catch(()=>{});}
+  finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
 });
 app.listen(port,"0.0.0.0",()=>console.log("EquiAI AI service listening on "+port));
