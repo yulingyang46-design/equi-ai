@@ -1,5 +1,6 @@
-import { mkdir, copyFile } from "node:fs/promises";
+import { mkdir, copyFile, cp } from "node:fs/promises";
 
 await mkdir("www", { recursive: true });
 await copyFile("index.html", "www/index.html");
-console.log("EquiAI web app copied to www/");
+await cp("src", "www/src", { recursive: true });
+console.log("EquiAI web app and modular source files copied to www/");
