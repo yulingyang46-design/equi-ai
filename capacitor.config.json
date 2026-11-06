@@ -1,6 +1,6 @@
 {
   "appId": "com.equiai.app.v2",
-  "appName": "EquiAI",
+  "appName": "EquiAI v2",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
