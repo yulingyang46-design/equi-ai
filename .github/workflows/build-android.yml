@@ -31,6 +31,8 @@ jobs:
           packages: platform-tools
       - name: Install dependencies
         run: npm install
+      - name: Validate JavaScript syntax
+        run: npm run check
       - name: Prepare web assets
         run: npm run build
       - name: Generate Android project
