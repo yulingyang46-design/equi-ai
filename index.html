@@ -318,8 +318,10 @@ function statusRecord(id){
   if(!Number.isInteger(i)||i<0||i>=opts.length){toast("编号无效。");return}
   r.status=opts[i];if(save())toast("学习状态已更新。");
 }
-function deleteRecord(id){
+async function deleteRecord(id){
   if(!confirm("确定删除这条资料吗？"))return;
+  const record=data.find(r=>r.id===id);
+  if(record&&record.localVideoId){try{const store=await import("./src/modules/local-videos.js");await store.deleteLocalVideo(record.localVideoId)}catch(e){}}
   data=data.filter(r=>r.id!==id);
   if(save())toast("资料已删除。");
 }
@@ -391,8 +393,9 @@ function importData(){
   };
   reader.readAsText(file);
 }
-function clearData(){
+async function clearData(){
   if(!confirm("确定清空所有本地学习资料吗？请先备份。"))return;
+  try{const store=await import("./src/modules/local-videos.js");await store.clearLocalVideos()}catch(e){}
   data=[];if(save())toast("本地资料已清空。");
 }
 const filter=document.getElementById("filter");
