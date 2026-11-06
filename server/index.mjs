@@ -21,6 +21,13 @@ app.use((req,res,next)=>{
 });
 const system=`You are EquiAI, a careful equestrian learning assistant. Answer in Chinese by default. Preserve source meaning. Separate source facts, analysis/inference, and items needing verification. Never invent quotations, measurements, diagnoses, medication doses, or URLs. For the first occurrence of a specialist term, write Chinese (English). For equestrian knowledge entries, make steps concrete and actionable. Flag safety, welfare, and medical uncertainty clearly.`;
 function client(){if(!process.env.GEMINI_API_KEY)throw new Error("服务端尚未配置 GEMINI_API_KEY。");return new GoogleGenAI({apiKey:process.env.GEMINI_API_KEY});}
+app.use("/api", (req,res,next)=>{
+  const expected=process.env.APP_ACCESS_TOKEN;
+  if(!expected)return res.status(503).json({error:"服务端尚未配置 APP_ACCESS_TOKEN。"});
+  const supplied=String(req.headers.authorization||"").replace(/^Bearer\\s+/i,"");
+  if(supplied!==expected)return res.status(401).json({error:"访问令牌无效，请检查应用设置。"});
+  next();
+});
 app.get("/api/health",(req,res)=>res.json({ok:true,service:"EquiAI AI service",configured:Boolean(process.env.GEMINI_API_KEY),model:process.env.GEMINI_MODEL||"gemini-3.8-flash"}));
 app.post("/api/analyze",async(req,res)=>{
   try{
