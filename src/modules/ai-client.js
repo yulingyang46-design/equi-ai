@@ -17,6 +17,7 @@ async function request(path,options={}){
 export async function analyzeText({text,task,language="中文",context=""}){
   return request("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,task,language,context})});
 }
+export async function analyzeUrl({url,task,context=""}){return request("/api/analyze-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,task,context})});}
 export async function analyzeVideo({mediaId,prompt="请分析这段马术教学视频",context=""}){
   const blob=await mediaBlob(mediaId);if(!blob)throw new Error("本地视频文件不存在，请重新导入。");
   const form=new FormData();form.append("video",blob,"equiai-video."+((blob.type.split("/")[1]||"mp4").replace("quicktime","mov")));form.append("prompt",prompt);form.append("context",context);
