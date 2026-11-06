@@ -324,7 +324,7 @@ function deleteRecord(id){
 async function openSource(raw){
  const url=validURL(raw); if(!url){toast("链接无效");return}
  try { const links=await import("./src/modules/platform-links.js"); const p=links.detectPlatform(url); toast("正在打开"+p.label+"…"); await links.openVideoSource(url); }
- catch(e){ window.open(url,"_blank","noopener,noreferrer"); }
+ catch(e){ window.location.assign(url); }
 }
 function makeTask(){
   const source=document.getElementById("source").value.trim();
