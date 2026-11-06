@@ -27,7 +27,7 @@ app.post("/api/analyze",async(req,res)=>{
     const {text="",task="分析并整理马术学习资料",language="中文",context=""}=req.body||{};
     if(!String(text).trim())return res.status(400).json({error:"请先提供字幕或教学文字。"});
     if(String(text).length>180000)return res.status(413).json({error:"文本过长，请分段处理。"});
-    const result=await client().models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:system+"\\n\\n任务："+task+"\\n输出语言："+language+"\\n补充背景："+context+"\\n\\n原始资料：\\n"+text});
+    const result=await client().models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:system+"\n\n任务："+task+"\n输出语言："+language+"\n补充背景："+context+"\n\n原始资料：\n"+text});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze:",e);res.status(502).json({error:e.message||"AI 分析失败，请稍后重试。"});}
 });
@@ -46,7 +46,7 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
     if(String(remote.state)!=="ACTIVE")throw new Error("视频处理超时，请缩短视频或稍后重试。");
     const prompt=String(req.body?.prompt||"请分析马术教学视频");
     const context=String(req.body?.context||"");
-    const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\\n\\n任务："+prompt+"\\n背景："+context+"\\n请按时间顺序整理：画面内容、骑手动作、马匹反应、教学要点、可能错误、纠正建议、无法确认之处。不要臆测画面看不清的细节。"])});
+    const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请按时间顺序整理：画面内容、骑手动作、马匹反应、教学要点、可能错误、纠正建议、无法确认之处。不要臆测画面看不清的细节。"])});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze-video:",e);res.status(502).json({error:e.message||"视频分析失败。"});}
   finally{await fs.unlink(file.path).catch(()=>{});}
