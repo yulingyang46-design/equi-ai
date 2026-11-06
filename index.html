@@ -98,6 +98,9 @@ footer{text-align:center;color:#738076;font-size:11px;padding:25px}
       <input id="title" required maxlength="180" placeholder="例如：正确建立腿部辅助">
       <label for="url">视频链接（选填）</label>
       <input id="url" type="url" placeholder="粘贴 YouTube、抖音、快手等视频链接">
+      <label for="localVideo">或导入手机本地视频</label>
+      <input id="localVideo" type="file" accept="video/*">
+      <p class="muted">本地视频保存在本机应用数据中。单个文件暂限 500 MB；JSON 备份不包含视频文件。</p>
       <label for="category">知识分类</label>
       <select id="category">
         <option>骑乘基础</option><option>盛装舞步</option><option>场地障碍</option>
@@ -113,7 +116,7 @@ footer{text-align:center;color:#738076;font-size:11px;padding:25px}
       <button class="primary" type="submit">保存资料</button>
     </form>
   </div>
-  <div class="tip">资料保存在当前浏览器中。请定期导出备份，避免清除浏览器数据后丢失。</div>
+  <div class="tip">文字资料保存在本机；视频文件单独保存在应用数据库中。JSON 备份不包含视频文件。</div>
 </section>
 
 <section class="page" id="library">
@@ -175,6 +178,7 @@ footer{text-align:center;color:#738076;font-size:11px;padding:25px}
 <footer>EquiAI · 专注学习 · 尊重马匹 · 持续精进</footer>
 </main>
 <div id="toast" role="status"></div>
+<div id="videoModal" style="display:none;position:fixed;inset:0;background:#000d;z-index:30;padding:18px;align-items:center;justify-content:center" onclick="if(event.target===this)closeLocalVideo()"><div style="background:white;border-radius:14px;padding:14px;width:min(100%,760px)"><div style="display:flex;justify-content:space-between;align-items:center"><strong>本地视频播放</strong><button class="secondary" onclick="closeLocalVideo()">关闭</button></div><video id="localPlayer" controls playsinline style="width:100%;max-height:65vh;background:#111"></video></div></div>
 
 <script>
 "use strict";
@@ -232,22 +236,19 @@ function go(page){
 }
 document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.page)));
 
-document.getElementById("form").addEventListener("submit",e=>{
+document.getElementById("form").addEventListener("submit",async e=>{
   e.preventDefault();
   const title=document.getElementById("title").value.trim();
   const raw=document.getElementById("url").value.trim();
   const url=raw?validURL(raw):"";
+  const videoFile=document.getElementById("localVideo").files[0]||null;
   if(!title){toast("请填写资料标题。");return}
   if(raw&&!url){toast("链接格式不正确，请检查。");return}
-  data.unshift({
-    id:Date.now().toString(36)+Math.random().toString(36).slice(2),
-    title,url,
-    category:document.getElementById("category").value,
-    language:document.getElementById("language").value,
-    status:document.getElementById("status").value,
-    notes:document.getElementById("notes").value.trim(),
-    created:new Date().toISOString()
-  });
+  if(videoFile&&!videoFile.type.startsWith("video/")){toast("请选择视频文件。");return}
+  if(videoFile&&videoFile.size>500*1024*1024){toast("单个视频暂时不能超过 500 MB。");return}
+  let localVideoId="";
+  if(videoFile){try{const store=await import("./src/modules/local-videos.js");localVideoId=await store.saveLocalVideo(videoFile)}catch(err){toast("本地视频保存失败，可能是存储空间不足。");return}}
+  data.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2),title,url,localVideoId,category:document.getElementById("category").value,language:document.getElementById("language").value,status:document.getElementById("status").value,notes:document.getElementById("notes").value.trim(),created:new Date().toISOString()});
   if(save()){e.target.reset();toast("学习资料已保存！");go("library")}
 });
 
@@ -258,6 +259,7 @@ function recordHTML(r){
     <span class="badge">${esc(r.category)}</span>
     <span class="badge">${esc(r.status)}</span>
     ${url?`<p><button class="primary" type="button" data-url="${esc(url)}" onclick="openSource(this.dataset.url)">▶ 直达视频出处</button></p>`:""}
+    ${r.localVideoId?`<p><button class="secondary" type="button" data-videoid="${esc(r.localVideoId)}" onclick="openLocalVideo(this.dataset.videoid)">▶ 播放本地视频</button></p>`:""}
     ${r.notes?`<div class="note">${esc(r.notes)}</div>`:""}
     <p class="muted">语言：${esc(r.language||"暂不确定")} · 添加于 ${esc(new Date(r.created).toLocaleDateString("zh-CN"))}</p>
     <button class="secondary" onclick="editRecord('${esc(r.id)}')">编辑</button>
@@ -326,6 +328,9 @@ async function openSource(raw){
  try { const links=await import("./src/modules/platform-links.js"); const p=links.detectPlatform(url); toast("正在打开"+p.label+"…"); await links.openVideoSource(url); }
  catch(e){ window.location.assign(url); }
 }
+let activeVideoUrl="";
+async function openLocalVideo(id){try{const store=await import("./src/modules/local-videos.js");const blob=await store.getLocalVideo(id);if(!blob){toast("找不到视频文件。");return}if(activeVideoUrl)URL.revokeObjectURL(activeVideoUrl);activeVideoUrl=URL.createObjectURL(blob);const player=document.getElementById("localPlayer");player.src=activeVideoUrl;document.getElementById("videoModal").style.display="flex";player.play().catch(()=>{})}catch(e){toast("无法读取本地视频。")}}
+function closeLocalVideo(){const player=document.getElementById("localPlayer");player.pause();player.removeAttribute("src");player.load();document.getElementById("videoModal").style.display="none";if(activeVideoUrl)URL.revokeObjectURL(activeVideoUrl);activeVideoUrl=""}
 function makeTask(){
   const source=document.getElementById("source").value.trim();
   if(!source){toast("请先粘贴字幕或教学内容。");return}
