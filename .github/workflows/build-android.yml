@@ -1,8 +1,12 @@
 name: Build EquiAI Android APK
 
+concurrency:
+  group: equiai-android-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
-    branches: [android-apk]
+    branches: [android-apk, android-v2-complete]
   workflow_dispatch:
 
 permissions:
@@ -23,6 +27,15 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-capacitor7
+          restore-keys: |
+            ${{ runner.os }}-gradle-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -31,6 +44,8 @@ jobs:
           packages: platform-tools
       - name: Install dependencies
         run: npm install
+      - name: Validate JavaScript syntax
+        run: npm run check
       - name: Prepare web assets
         run: npm run build
       - name: Generate Android project
@@ -38,7 +53,7 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
       - name: Build debug APK
-        run: cd android && ./gradlew assembleDebug
+        run: cd android && ./gradlew assembleDebug --no-daemon --max-workers=2
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
