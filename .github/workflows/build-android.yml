@@ -25,6 +25,10 @@ jobs:
           java-version: 21
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Google no longer distributes the legacy "tools" SDK package.
+          # The action already installs command-line tools; only platform-tools is needed here.
+          packages: platform-tools
       - name: Install dependencies
         run: npm install
       - name: Prepare web assets
