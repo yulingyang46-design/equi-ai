@@ -97,7 +97,7 @@ footer{text-align:center;color:#738076;font-size:11px;padding:25px}
       <label for="title">资料标题 *</label>
       <input id="title" required maxlength="180" placeholder="例如：正确建立腿部辅助">
       <label for="url">视频链接（选填）</label>
-      <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=...">
+      <input id="url" type="url" placeholder="粘贴 YouTube、抖音、快手等视频链接">
       <label for="category">知识分类</label>
       <select id="category">
         <option>骑乘基础</option><option>盛装舞步</option><option>场地障碍</option>
@@ -257,7 +257,7 @@ function recordHTML(r){
     <h3>${esc(r.title)}</h3>
     <span class="badge">${esc(r.category)}</span>
     <span class="badge">${esc(r.status)}</span>
-    ${url?`<p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">▶ 打开原视频</a></p>`:""}
+    ${url?`<p><button class="primary" type="button" data-url="${esc(url)}" onclick="openSource(this.dataset.url)">▶ 直达视频出处</button></p>`:""}
     ${r.notes?`<div class="note">${esc(r.notes)}</div>`:""}
     <p class="muted">语言：${esc(r.language||"暂不确定")} · 添加于 ${esc(new Date(r.created).toLocaleDateString("zh-CN"))}</p>
     <button class="secondary" onclick="editRecord('${esc(r.id)}')">编辑</button>
@@ -320,6 +320,11 @@ function deleteRecord(id){
   if(!confirm("确定删除这条资料吗？"))return;
   data=data.filter(r=>r.id!==id);
   if(save())toast("资料已删除。");
+}
+async function openSource(raw){
+ const url=validURL(raw); if(!url){toast("链接无效");return}
+ try { const links=await import("./src/modules/platform-links.js"); const p=links.detectPlatform(url); toast("正在打开"+p.label+"…"); await links.openVideoSource(url); }
+ catch(e){ window.open(url,"_blank","noopener,noreferrer"); }
 }
 function makeTask(){
   const source=document.getElementById("source").value.trim();
