@@ -1,7 +1,7 @@
 import { mediaBlob } from "./storage-v2.js";
 const ENDPOINT_KEY="equiAI_ai_endpoint";
 export function getAIEndpoint(){return localStorage.getItem(ENDPOINT_KEY)||"";}
-export function setAIEndpoint(value){const v=String(value||"").trim().replace(/\\/$/,"");if(v)localStorage.setItem(ENDPOINT_KEY,v);else localStorage.removeItem(ENDPOINT_KEY);return v;}
+export function setAIEndpoint(value){const v=String(value||"").trim().replace(/\/$/,"");if(v)localStorage.setItem(ENDPOINT_KEY,v);else localStorage.removeItem(ENDPOINT_KEY);return v;}
 async function request(path,options={}){
   const base=getAIEndpoint();
   if(!base)throw new Error("尚未配置安全 AI 服务端地址。请在「设置」中填写部署后的服务端地址；不要填写 API 密钥。");
