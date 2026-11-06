@@ -11,7 +11,7 @@ const PLATFORMS = [
 
 export function detectPlatform(rawUrl) {
   try {
-    const host = new URL(rawUrl).hostname.toLowerCase().replace(/^www\\./, "");
+    const host = new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, "");
     return PLATFORMS.find(p => p.hosts.some(d => host === d || host.endsWith("." + d))) || { id: "web", label: "网页视频" };
   } catch {
     return { id: "unknown", label: "未知来源" };
@@ -22,7 +22,7 @@ export async function openVideoSource(rawUrl) {
   const url = new URL(rawUrl);
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("Only HTTP(S) links are supported");
   if (Capacitor.isNativePlatform()) {
-    // Opens the original URL in Android Custom Tabs; Android may route verified App Links to an installed official app.
+    // Opens the original URL in Android Custom Tabs. Android may route verified App Links to an installed official app.
     await Browser.open({ url: url.href, toolbarColor: "#173d32" });
     return { opened: true, method: "system-browser", platform: detectPlatform(url.href) };
   }
