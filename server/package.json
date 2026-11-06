@@ -1,8 +1,14 @@
 {
-  "name":"equiai-ai-service",
-  "version":"1.0.0",
-  "private":true,
-  "type":"module",
-  "scripts":{"start":"node index.mjs"},
-  "dependencies":{"@google/genai":"^1.30.0","express":"^5.1.0","multer":"^2.0.2"}
+  "name": "equiai-ai-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^2.32.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  }
 }
