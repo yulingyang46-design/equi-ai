@@ -189,11 +189,11 @@ app.get("/api/search-videos",async(req,res)=>{
       if(platform==="other")results=results.filter(x=>x.platform==="web");
       return res.json({ok:true,provider:source.join(" + ")||"国内公开网页索引",results:results.slice(0,15),warning:source.filter(x=>x.includes("不可用")).join("；")});
     }
-    let results=[],provider="",failures=[];
+    let results=[],searchProvider="",failures=[];
     try{
       const response=await fetch("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q),{headers:{"User-Agent":"Mozilla/5.0 (compatible; ZizaiHorseLibrary/1.0)","Accept":"text/html"},signal:AbortSignal.timeout(10000)});
       if(!response.ok)throw new Error("DuckDuckGo HTTP "+response.status);
-      results=parseSearchHtml(await response.text());if(!results.length)throw new Error("DuckDuckGo 未返回可解析结果");provider="DuckDuckGo";
+      results=parseSearchHtml(await response.text());if(!results.length)throw new Error("DuckDuckGo 未返回可解析结果");searchProvider="DuckDuckGo";
     }catch(e){failures.push("DuckDuckGo: "+e.message);}
     if(!results.length){
       try{
@@ -205,7 +205,7 @@ app.get("/api/search-videos",async(req,res)=>{
           const url=get("link"),title=get("title"),snippet=get("description");let domain="";try{domain=new URL(url).hostname.replace(/^www\\./,"");}catch{}
           return {title,url,snippet,domain,platform:identifyVideoPlatform(url)};
         }).filter(x=>x.url);
-        if(!results.length)throw new Error("Bing RSS 未返回可解析结果");provider="Bing RSS";
+        if(!results.length)throw new Error("Bing RSS 未返回可解析结果");searchProvider="Bing RSS";
       }catch(e){failures.push("Bing: "+e.message);}
     }
     const seen=new Set();
@@ -213,7 +213,7 @@ app.get("/api/search-videos",async(req,res)=>{
     if(platform!=="all"&&platform!=="other")results=results.filter(x=>x.platform===platform);
     if(platform==="other")results=results.filter(x=>x.platform==="web");
     if(!results.length&&failures.length===2)throw new Error("搜索服务均不可用；"+failures.join("；"));
-    res.json({ok:true,provider:provider+" 公开网页索引",results:results.slice(0,15),warning:failures.length?failures.join("；"):""});
+    res.json({ok:true,provider:searchProvider+" 公开网页索引",results:results.slice(0,15),warning:failures.length?failures.join("；"):""});
   }catch(e){console.error("search-videos:",e);res.status(502).json({error:e.message||"联网搜索失败，请稍后重试。"});}
 });
 
