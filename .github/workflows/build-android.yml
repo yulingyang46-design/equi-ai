@@ -1,4 +1,4 @@
-name: Build EquiAI Android APK
+name: Build 仔仔的马术库 Android APK
 
 concurrency:
   group: equiai-android-${{ github.ref }}
@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: [android-apk, android-v2-complete]
+    branches: [android-apk, android-v2-complete, android-v2-online-search]
   workflow_dispatch:
 
 permissions:
