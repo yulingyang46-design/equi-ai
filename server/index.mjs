@@ -105,7 +105,7 @@ app.post("/api/analyze-url",async(req,res)=>{
 app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   const file=req.file;
   if(!file)return res.status(400).json({error:"没有收到视频文件。"});
-  let ai, remote;
+  let ai, remote, oss, ossKey="";
   try{
     if(provider()==="qwen"){
       const ext=path.extname(file.originalname||"").toLowerCase(),mime=(file.mimetype&&file.mimetype!=="application/octet-stream")?file.mimetype:({".mp4":"video/mp4",".mov":"video/quicktime",".m4v":"video/mp4",".webm":"video/webm",".avi":"video/x-msvideo",".mkv":"video/x-matroska"}[ext]||"video/mp4");
@@ -118,7 +118,7 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
         await oss.put(ossKey,file.path,{headers:{"Content-Type":mime}});
         url=oss.signatureUrl(ossKey,{expires:3600});
       }
-      const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\\n\\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\\n背景："+String(req.body?.context||"")+"\\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
+      const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\n\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\n背景："+String(req.body?.context||"")+"\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
       return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
     }
     ai=client();
