@@ -32,7 +32,7 @@ export async function searchVideos({query,platform="all"}){return request("/api/
 
 export async function analyzeUpload({file,prompt="请分析这份马术学习资料",context=""}){
   if(!file)throw new Error("请先选择文件。");
-  const isVideo=file.type.startsWith("video/")||/\.(mp4|mov|m4v|webm|avi|mkv|flv)$/i.test(file.name||"");if(getAIRegion()==="china"&&isVideo&&file.size>7*1024*1024)throw new Error("国内服务当前本地视频直传上限为 7 MB；请先使用较小视频，较大视频的 OSS 中转正在规划接入。");if(getAIRegion()==="china"&&file.type.startsWith("image/")&&file.size>10*1024*1024)throw new Error("国内服务图片暂限 10 MB，请压缩后上传。");
+  const isVideo=file.type.startsWith("video/")||/\.(mp4|mov|m4v|webm|avi|mkv|flv)$/i.test(file.name||"");if(getAIRegion()==="china"&&isVideo&&file.size>200*1024*1024)throw new Error("国内服务当前单个视频上传上限为 200 MB；请压缩或分段后再试。");if(getAIRegion()==="china"&&file.type.startsWith("image/")&&file.size>10*1024*1024)throw new Error("国内服务图片暂限 10 MB，请压缩后上传。");
   const form=new FormData();form.append(isVideo?"video":"file",file,file.name||"learning-material");
   form.append("prompt",prompt);form.append("context",context);
   const path=isVideo?"/api/analyze-video":"/api/analyze-file";
