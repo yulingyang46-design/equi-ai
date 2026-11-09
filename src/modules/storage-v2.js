@@ -68,16 +68,35 @@ export async function migrateLegacy(){
   await put("settings",{id:"legacy-migrated",value:true,at:new Date().toISOString()});
   return count;
 }
+async function blobToDataUrl(blob){
+  return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));reader.onerror=()=>reject(reader.error||new Error("读取媒体文件失败"));reader.readAsDataURL(blob);});
+}
+function dataUrlToBlob(value){
+  const match=String(value||"").match(/^data:([^;,]+)?;base64,(.*)$/s);if(!match)throw new Error("备份中的媒体文件格式无效");
+  const binary=atob(match[2]),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  return new Blob([bytes],{type:match[1]||"application/octet-stream"});
+}
 export async function exportAll(){
-  const [records,knowledge,settings]=await Promise.all([all("records"),all("knowledge"),all("settings")]);
-  return {app:"EquiAI",schemaVersion:2,exportedAt:new Date().toISOString(),records,knowledge,settings:settings.filter(x=>x.id!=="ai-endpoint")};
+  const [records,knowledge,settings,media]=await Promise.all([all("records"),all("knowledge"),all("settings"),all("media")]);
+  const packedMedia=[];
+  for(const item of media){if(!item?.blob)continue;packedMedia.push({id:item.id,name:item.name||"media",type:item.type||item.blob.type||"application/octet-stream",size:item.size||item.blob.size||0,savedAt:item.savedAt||"",dataUrl:await blobToDataUrl(item.blob)});}
+  return {app:"EquiAI",schemaVersion:3,exportedAt:new Date().toISOString(),records,knowledge,settings:settings.filter(x=>x.id!=="ai-endpoint"),media:packedMedia};
 }
 export async function importAll(data){
   let n=0;
+  const mediaMap=new Map();
+  for(const item of (data.media||[])){
+    if(!item?.dataUrl||!item.id)continue;
+    const id="import-media-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+    const blob=dataUrlToBlob(item.dataUrl);
+    await put("media",{id,blob,name:item.name||"imported-media",type:item.type||blob.type,size:item.size||blob.size,savedAt:item.savedAt||new Date().toISOString()});
+    mediaMap.set(item.id,id);
+  }
   for(const r of (data.records||[])){
     if(!r||typeof r.title!=="string")continue;
-    const mediaMissing=Boolean(r.mediaId||r.localVideoId);
-    await put("records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId:"",legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()});
+    const mediaId=mediaMap.get(r.mediaId)||"";
+    const mediaMissing=Boolean((r.mediaId||r.localVideoId)&&!mediaId);
+    await put("records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId,legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()});
     n++;
   }
   let kCount=0;
