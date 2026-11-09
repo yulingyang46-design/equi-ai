@@ -164,6 +164,31 @@ app.get("/api/search-videos",async(req,res)=>{
   const domains={youtube:"(site:youtube.com OR site:youtu.be)",bilibili:"(site:bilibili.com OR site:b23.tv)",douyin:"site:douyin.com",kuaishou:"(site:kuaishou.com OR site:gifshow.com)",xiaohongshu:"(site:xiaohongshu.com OR site:xhslink.com)",other:"-site:youtube.com -site:bilibili.com -site:douyin.com"};
   const q=query+" 马术 视频 "+(domains[platform]||"");
   try{
+    if(provider()==="qwen"){
+      let results=[],source=[];
+      if(platform==="all"||platform==="bilibili"){
+        try{
+          const u="https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword="+encodeURIComponent(query+" 马术")+"&page=1";
+          const br=await fetch(u,{headers:{"User-Agent":"Mozilla/5.0","Referer":"https://www.bilibili.com/"},signal:AbortSignal.timeout(12000)});
+          if(br.ok){const bj=await br.json();results=(bj.data?.result||[]).map(x=>({title:decodeSearchHtml(x.title||""),url:x.arcurl||"",snippet:decodeSearchHtml(x.description||""),domain:"www.bilibili.com",platform:"bilibili"})).filter(x=>x.url);if(results.length)source.push("哔哩哔哩公开搜索接口");}
+        }catch(e){source.push("哔哩哔哩搜索暂不可用："+e.message);}
+      }
+      if(platform==="all"||platform==="other"||["douyin","kuaishou","xiaohongshu","youtube"].includes(platform)){
+        const site={douyin:"site:douyin.com",kuaishou:"site:kuaishou.com",xiaohongshu:"site:xiaohongshu.com",youtube:"site:youtube.com",other:"-site:bilibili.com"}[platform]||"";
+        try{
+          const br=await fetch("https://www.baidu.com/s?wd="+encodeURIComponent(query+" 马术 视频 "+site),{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html"},signal:AbortSignal.timeout(12000)});
+          if(br.ok){
+            const html=await br.text(),links=[...html.matchAll(/<h3[^>]*>[\\s\\S]*?<a[^>]*href="(https?:[^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi)];
+            for(const m of links){const url=m[1];let host="";try{host=new URL(url).hostname.toLowerCase();}catch{}if(!host||host.includes("baidu.com"))continue;results.push({title:decodeSearchHtml(m[2]),url,snippet:"来自百度公开网页索引",domain:host.replace(/^www\\./,""),platform:identifyVideoPlatform(url)});}
+            if(links.length)source.push("百度网页搜索");
+          }
+        }catch(e){source.push("百度搜索暂不可用："+e.message);}
+      }
+      const seen=new Set();results=results.filter(x=>x.url&&!seen.has(x.url)&&seen.add(x.url));
+      if(platform!=="all"&&platform!=="other")results=results.filter(x=>x.platform===platform);
+      if(platform==="other")results=results.filter(x=>x.platform==="web");
+      return res.json({ok:true,provider:source.join(" + ")||"国内公开网页索引",results:results.slice(0,15),warning:source.filter(x=>x.includes("不可用")).join("；")});
+    }
     let results=[],provider="",failures=[];
     try{
       const response=await fetch("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q),{headers:{"User-Agent":"Mozilla/5.0 (compatible; ZizaiHorseLibrary/1.0)","Accept":"text/html"},signal:AbortSignal.timeout(10000)});
