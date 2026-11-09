@@ -25,6 +25,7 @@ For R entries, match R22 practical depth: 适用对象; 核心宗旨; 前置硬�
 For horse health, medication, lameness and riding safety, state evidence limits and risks; never present model output as diagnosis or treatment instructions.`;
 function client(){if(!process.env.GEMINI_API_KEY)throw new Error("服务端尚未配置 GEMINI_API_KEY。");return new GoogleGenAI({apiKey:process.env.GEMINI_API_KEY});}
 app.use("/api", (req,res,next)=>{
+  if(req.path==="/health")return next();
   const expected=process.env.APP_ACCESS_TOKEN;
   if(!expected)return res.status(503).json({error:"服务端尚未配置 APP_ACCESS_TOKEN。"});
   const supplied=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
@@ -75,4 +76,28 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   }catch(e){console.error("analyze-video:",e);res.status(502).json({error:e.message||"视频分析失败。"});}
   finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
 });
-app.listen(port,"0.0.0.0",()=>console.log("EquiAI AI service listening on "+port));
+
+function decodeSearchHtml(value=""){return String(value).replace(/<[^>]*>/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&#(\\d+);/g,(_,n)=>String.fromCharCode(Number(n))).replace(/&#x([\\da-f]+);/gi,(_,n)=>String.fromCharCode(parseInt(n,16))).replace(/\\s+/g," ").trim();}
+function unwrapSearchUrl(raw){try{const u=new URL(raw.startsWith("//")?"https:"+raw:raw);return u.searchParams.get("uddg")||u.href;}catch{return raw;}}
+function identifyVideoPlatform(raw){try{const h=new URL(raw).hostname.toLowerCase().replace(/^www\\./,"");if(h.includes("youtube.com")||h==="youtu.be")return "youtube";if(h.includes("bilibili.com")||h==="b23.tv")return "bilibili";if(h.includes("douyin.com"))return "douyin";if(h.includes("kuaishou.com")||h.includes("gifshow.com"))return "kuaishou";if(h.includes("xiaohongshu.com")||h.includes("xhslink.com"))return "xiaohongshu";return "web";}catch{return "web";}}
+function parseSearchHtml(html){const links=[...html.matchAll(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi)];const snippets=[...html.matchAll(/<(?:a|div)[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\\s\\S]*?)<\\/(?:a|div)>/gi)];return links.map((m,i)=>{const url=unwrapSearchUrl(m[1]);let domain="";try{domain=new URL(url).hostname.replace(/^www\\./,"");}catch{}return {title:decodeSearchHtml(m[2]),url,snippet:decodeSearchHtml(snippets[i]?.[1]||""),domain,platform:identifyVideoPlatform(url)};});}
+app.get("/api/search-videos",async(req,res)=>{
+  const query=String(req.query.q||"").trim().slice(0,160);
+  if(!query)return res.status(400).json({error:"请输入视频搜索关键词。"});
+  const platform=String(req.query.platform||"all");
+  const domains={youtube:"(site:youtube.com OR site:youtu.be)",bilibili:"(site:bilibili.com OR site:b23.tv)",douyin:"site:douyin.com",kuaishou:"(site:kuaishou.com OR site:gifshow.com)",xiaohongshu:"(site:xiaohongshu.com OR site:xhslink.com)",other:"-site:youtube.com -site:bilibili.com -site:douyin.com"};
+  const q=query+" 马术 视频 "+(domains[platform]||"");
+  try{
+    const response=await fetch("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q),{headers:{"User-Agent":"Mozilla/5.0 (compatible; ZizaiHorseLibrary/1.0)","Accept":"text/html"},signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw new Error("公开搜索服务暂时不可用（"+response.status+"）。");
+    const html=await response.text();
+    let results=parseSearchHtml(html);
+    const seen=new Set();
+    results=results.filter(x=>x.url&&/^https?:\\/\\//i.test(x.url)&&!seen.has(x.url)&&seen.add(x.url));
+    if(platform!=="all"&&platform!=="other")results=results.filter(x=>x.platform===platform);
+    if(platform==="other")results=results.filter(x=>x.platform==="web");
+    res.json({ok:true,provider:"DuckDuckGo 公开网页索引",results:results.slice(0,15)});
+  }catch(e){console.error("search-videos:",e);res.status(502).json({error:e.message||"联网搜索失败，请稍后重试。"});}
+});
+
+app.listen(port,"0.0.0.0",()=>console.log("Zizai Horse Library service listening on "+port));
