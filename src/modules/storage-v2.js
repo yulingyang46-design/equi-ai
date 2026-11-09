@@ -95,7 +95,7 @@ export async function importAll(data){
   for(const r of (data.records||[])){
     if(!r||typeof r.title!=="string")continue;
     const mediaId=mediaMap.get(r.mediaId)||"";
-    const mediaMissing=Boolean((r.mediaId||r.localVideoId)&&!mediaId);
+    const mediaMissing=Boolean(r.legacyVideoMissing||((r.mediaId||r.localVideoId)&&!mediaId));
     await put("records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId,legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()});
     n++;
   }
