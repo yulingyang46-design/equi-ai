@@ -65,13 +65,13 @@ app.post("/api/analyze-url",async(req,res)=>{
     let parsed;try{parsed=new URL(url);}catch{return res.status(400).json({error:"视频链接格式无效。"});}
     if(!["http:","https:"].includes(parsed.protocol))return res.status(400).json({error:"仅支持 HTTP 或 HTTPS 链接。"});
     if(provider()==="qwen"){
-      if(/\\.(mp4|mov|m4v|webm)(?:$|[?#])/i.test(parsed.pathname+parsed.search)){
-        const output=await qwenChat([{type:"video_url",video_url:{url:parsed.href},fps:2},{type:"text",text:system+"\\n任务："+task+"；背景："+context+"。按时间顺序分析马匹动作、骑手动作、节奏和路线，标记无法确认之处。"}]);
+      if(/\.(mp4|mov|m4v|webm)(?:$|[?#])/i.test(parsed.pathname+parsed.search)){
+        const output=await qwenChat([{type:"video_url",video_url:{url:parsed.href},fps:2},{type:"text",text:system+"\n任务："+task+"；背景："+context+"。按时间顺序分析马匹动作、骑手动作、节奏和路线，标记无法确认之处。"}]);
         return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
       }
       let pageText="";
-      try{const pr=await fetch(parsed.href,{headers:{"User-Agent":"Mozilla/5.0"},signal:AbortSignal.timeout(15000)});if(pr.ok){const raw=(await pr.text()).slice(0,120000);pageText=raw.replace(/<script[\\s\\S]*?<\\/script>|<style[\\s\\S]*?<\\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\\s+/g," ").trim();}}catch{}
-      const output=await qwenChat("请分析该链接页面实际可访问的文字："+task+"。背景："+context+"。若无法读取视频画面或字幕，必须明确说明，不得假装看过视频。链接："+parsed.href+"\\n页面文字："+(pageText||"服务端未能读取网页正文。"));
+      try{const pr=await fetch(parsed.href,{headers:{"User-Agent":"Mozilla/5.0"},signal:AbortSignal.timeout(15000)});if(pr.ok){const raw=(await pr.text()).slice(0,120000);pageText=raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ").trim();}}catch{}
+      const output=await qwenChat("请分析该链接页面实际可访问的文字："+task+"。背景："+context+"。若无法读取视频画面或字幕，必须明确说明，不得假装看过视频。链接："+parsed.href+"\n页面文字："+(pageText||"服务端未能读取网页正文。"));
       return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
     }
     const result=await client().models.generateContent({
@@ -90,7 +90,7 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
     if(provider()==="qwen"){
       if(file.size>7*1024*1024)throw new Error("国内版当前直传视频上限为 7 MB；更大的视频需要配置阿里云 OSS 中转后再分析。");
       const mime=file.mimetype||"video/mp4",data=await fs.readFile(file.path),url="data:"+mime+";base64,"+data.toString("base64");
-      const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\\n\\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\\n背景："+String(req.body?.context||"")+"\\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
+      const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\n\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\n背景："+String(req.body?.context||"")+"\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
       return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
     }
     ai=client();
@@ -131,7 +131,7 @@ app.post("/api/analyze-file",upload.single("file"),async(req,res)=>{
         if(mime.startsWith("image/")){
           if(file.size>10*1024*1024)throw new Error("国内版图片暂限 10 MB，请压缩图片后重试。");
           const data=await fs.readFile(file.path),url="data:"+mime+";base64,"+data.toString("base64");
-          const output=await qwenChat([{type:"image_url",image_url:{url}},{type:"text",text:system+"\\n\\n任务："+prompt+"\\n背景："+context+"\\n请识别图片内容并进行马术学习分析。"}]);
+          const output=await qwenChat([{type:"image_url",image_url:{url}},{type:"text",text:system+"\n\n任务："+prompt+"\n背景："+context+"\n请识别图片内容并进行马术学习分析。"}]);
           return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
         }
         const pdf=await pdfParse(await fs.readFile(file.path));source=pdf.text||"";
@@ -145,8 +145,8 @@ app.post("/api/analyze-file",upload.single("file"),async(req,res)=>{
       return res.status(415).json({error:"暂不支持此文件类型。请使用图片、PDF、DOCX、TXT、MD 或 CSV。"});
     }
     if(!source.trim())throw new Error("文件中没有可分析的文字内容。");
-    if(source.length>180000)source=source.slice(0,180000)+"\\n[内容过长，已截取前 180000 字符]";
-    if(provider()==="qwen"){const output=await qwenChat("任务："+prompt+"\\n背景："+context+"\\n文档原文：\\n"+source);return res.json({ok:true,provider:"qwen",model:modelName(),text:output});}
+    if(source.length>180000)source=source.slice(0,180000)+"\n[内容过长，已截取前 180000 字符]";
+    if(provider()==="qwen"){const output=await qwenChat("任务："+prompt+"\n背景："+context+"\n文档原文：\n"+source);return res.json({ok:true,provider:"qwen",model:modelName(),text:output});}
     const result=await client().models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:system+"\n\n任务："+prompt+"\n背景："+context+"\n\n文档原文：\n"+source});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze-file:",e);res.status(502).json({error:e.message||"文件分析失败。"});}
@@ -178,8 +178,8 @@ app.get("/api/search-videos",async(req,res)=>{
         try{
           const br=await fetch("https://www.baidu.com/s?wd="+encodeURIComponent(query+" 马术 视频 "+site),{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html"},signal:AbortSignal.timeout(12000)});
           if(br.ok){
-            const html=await br.text(),links=[...html.matchAll(/<h3[^>]*>[\\s\\S]*?<a[^>]*href="(https?:[^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi)];
-            for(const m of links){const url=m[1];let host="";try{host=new URL(url).hostname.toLowerCase();}catch{}if(!host||host.includes("baidu.com"))continue;results.push({title:decodeSearchHtml(m[2]),url,snippet:"来自百度公开网页索引",domain:host.replace(/^www\\./,""),platform:identifyVideoPlatform(url)});}
+            const html=await br.text(),links=[...html.matchAll(/<h3[^>]*>[\s\S]*?<a[^>]*href="(https?:[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)];
+            for(const m of links){const url=m[1];let host="";try{host=new URL(url).hostname.toLowerCase();}catch{}if(!host||host.includes("baidu.com"))continue;results.push({title:decodeSearchHtml(m[2]),url,snippet:"来自百度公开网页索引",domain:host.replace(/^www\./,""),platform:identifyVideoPlatform(url)});}
             if(links.length)source.push("百度网页搜索");
           }
         }catch(e){source.push("百度搜索暂不可用："+e.message);}
@@ -200,16 +200,16 @@ app.get("/api/search-videos",async(req,res)=>{
         const response=await fetch("https://www.bing.com/search?format=rss&q="+encodeURIComponent(q),{headers:{"User-Agent":"Mozilla/5.0 (compatible; ZizaiHorseLibrary/1.0)","Accept":"application/rss+xml,application/xml,text/xml"},signal:AbortSignal.timeout(12000)});
         if(!response.ok)throw new Error("Bing RSS HTTP "+response.status);
         const xml=await response.text();
-        results=[...xml.matchAll(/<item>([\\s\\S]*?)<\\/item>/gi)].map(m=>{
-          const part=m[1],get=t=>decodeSearchHtml((part.match(new RegExp("<"+t+">([\\s\\S]*?)<\\/"+t+">","i"))||[])[1]||"");
-          const url=get("link"),title=get("title"),snippet=get("description");let domain="";try{domain=new URL(url).hostname.replace(/^www\\./,"");}catch{}
+        results=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(m=>{
+          const part=m[1],get=t=>decodeSearchHtml((part.match(new RegExp("<"+t+">([\s\S]*?)<\/"+t+">","i"))||[])[1]||"");
+          const url=get("link"),title=get("title"),snippet=get("description");let domain="";try{domain=new URL(url).hostname.replace(/^www\./,"");}catch{}
           return {title,url,snippet,domain,platform:identifyVideoPlatform(url)};
         }).filter(x=>x.url);
         if(!results.length)throw new Error("Bing RSS 未返回可解析结果");searchProvider="Bing RSS";
       }catch(e){failures.push("Bing: "+e.message);}
     }
     const seen=new Set();
-    results=results.filter(x=>x.url&&/^https?:\\/\\//i.test(x.url)&&!seen.has(x.url)&&seen.add(x.url));
+    results=results.filter(x=>x.url&&/^https?:\/\//i.test(x.url)&&!seen.has(x.url)&&seen.add(x.url));
     if(platform!=="all"&&platform!=="other")results=results.filter(x=>x.platform===platform);
     if(platform==="other")results=results.filter(x=>x.platform==="web");
     if(!results.length&&failures.length===2)throw new Error("搜索服务均不可用；"+failures.join("；"));
