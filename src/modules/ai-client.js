@@ -24,3 +24,5 @@ export async function analyzeVideo({mediaId,prompt="请分析这段马术教学�
   return request("/api/analyze-video",{method:"POST",body:form});
 }
 export async function checkAI(){return request("/api/health");}
+
+export async function searchVideos({query,platform="all"}){return request("/api/search-videos?q="+encodeURIComponent(query)+"&platform="+encodeURIComponent(platform),{method:"GET"});}
