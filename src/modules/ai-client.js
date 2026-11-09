@@ -1,10 +1,13 @@
 import { mediaBlob } from "./storage-v2.js";
 const ENDPOINT_KEY="equiAI_ai_endpoint";
 const ACCESS_KEY="equiAI_access_token";
-export function getAIEndpoint(){return localStorage.getItem(ENDPOINT_KEY)||"";}
-export function setAIEndpoint(value){const v=String(value||"").trim().replace(/\/$/,"");if(v)localStorage.setItem(ENDPOINT_KEY,v);else localStorage.removeItem(ENDPOINT_KEY);return v;}
-export function getAIAccessToken(){return localStorage.getItem(ACCESS_KEY)||"";}
-export function setAIAccessToken(value){const v=String(value||"").trim();if(v)localStorage.setItem(ACCESS_KEY,v);else localStorage.removeItem(ACCESS_KEY);return v;}
+const REGION_KEY="equiAI_service_region";
+export function getAIRegion(){return localStorage.getItem(REGION_KEY)||"overseas";}
+export function setAIRegion(value){const v=value==="china"?"china":"overseas";localStorage.setItem(REGION_KEY,v);return v;}
+export function getAIEndpoint(){const region=getAIRegion();return localStorage.getItem(ENDPOINT_KEY+"_"+region)||(region==="overseas"?localStorage.getItem(ENDPOINT_KEY)||"":"");}
+export function setAIEndpoint(value){const v=String(value||"").trim().replace(/\/$/,""),key=ENDPOINT_KEY+"_"+getAIRegion();if(v)localStorage.setItem(key,v);else localStorage.removeItem(key);if(getAIRegion()==="overseas"){if(v)localStorage.setItem(ENDPOINT_KEY,v);else localStorage.removeItem(ENDPOINT_KEY);}return v;}
+export function getAIAccessToken(){const region=getAIRegion();return localStorage.getItem(ACCESS_KEY+"_"+region)||(region==="overseas"?localStorage.getItem(ACCESS_KEY)||"":"");}
+export function setAIAccessToken(value){const v=String(value||"").trim(),key=ACCESS_KEY+"_"+getAIRegion();if(v)localStorage.setItem(key,v);else localStorage.removeItem(key);if(getAIRegion()==="overseas"){if(v)localStorage.setItem(ACCESS_KEY,v);else localStorage.removeItem(ACCESS_KEY);}return v;}
 async function request(path,options={}){
   const base=getAIEndpoint();
   if(!base)throw new Error("尚未配置安全 AI 服务端地址。请在「设置」中填写部署后的服务端地址；不要填写 API 密钥。");
