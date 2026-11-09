@@ -64,7 +64,7 @@ async function generateGeminiContent(ai, request){
     const model=candidates[modelIndex];
     for(let attempt=1;attempt<=3;attempt++){
       try{
-        const result=await generateGeminiContent(ai,{...request,model});
+        const result=await ai.models.generateContent({...request,model});
         if(model!==primary)console.warn("Gemini fallback model succeeded:",model);
         return result;
       }catch(error){
