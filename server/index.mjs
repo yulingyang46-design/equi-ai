@@ -102,7 +102,7 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   try{
     if(provider()==="qwen"){
       if(file.size>7*1024*1024)throw new Error("国内版当前直传视频上限为 7 MB；更大的视频需要配置阿里云 OSS 中转后再分析。");
-      const mime=file.mimetype||"video/mp4",data=await fs.readFile(file.path),url="data:"+mime+";base64,"+data.toString("base64");
+      const ext=path.extname(file.originalname||"").toLowerCase(),mime=(file.mimetype&&file.mimetype!=="application/octet-stream")?file.mimetype:({".mp4":"video/mp4",".mov":"video/quicktime",".m4v":"video/mp4",".webm":"video/webm",".avi":"video/x-msvideo",".mkv":"video/x-matroska"}[ext]||"video/mp4"),data=await fs.readFile(file.path),url="data:"+mime+";base64,"+data.toString("base64");
       const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\n\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\n背景："+String(req.body?.context||"")+"\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
       return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
     }
@@ -129,7 +129,7 @@ app.post("/api/analyze-file",upload.single("file"),async(req,res)=>{
   let ai,remote;
   try{
     const name=String(file.originalname||"").toLowerCase();
-    const mime=file.mimetype||"application/octet-stream";
+    const ext=path.extname(name),mime=(file.mimetype&&file.mimetype!=="application/octet-stream")?file.mimetype:({".pdf":"application/pdf",".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".gif":"image/gif",".bmp":"image/bmp",".tif":"image/tiff",".tiff":"image/tiff"}[ext]||"application/octet-stream");
     const prompt=String(req.body?.prompt||"分析这份马术学习资料");
     const context=String(req.body?.context||"");
     let source="";
