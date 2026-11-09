@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
-    "check": "node --check index.mjs && node --input-type=module -e \"await import('@google/genai'); await import('mammoth'); await import('pdf-parse')\""
+    "check": "node --check index.mjs && node --input-type=module -e \"await import('@google/genai'); await import('mammoth'); await import('pdf-parse'); await import('ali-oss')\""
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
     "express": "^5.1.0",
     "multer": "^2.0.2",
     "mammoth": "^1.9.1",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "ali-oss": "^6.23.0"
   }
 }
