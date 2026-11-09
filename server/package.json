@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
-    "check": "node --check index.mjs && node --input-type=module -e \"await import('@google/genai'); await import('mammoth'); await import('pdf-parse'); await import('ali-oss')\""
+    "check": "node --check index.mjs && node --input-type=module -e \"await import('@google/genai'); await import('mammoth'); await import('pdf-parse'); await import('ali-oss'); await import('ali-oss')\""
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
