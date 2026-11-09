@@ -120,15 +120,31 @@ app.get("/api/search-videos",async(req,res)=>{
   const domains={youtube:"(site:youtube.com OR site:youtu.be)",bilibili:"(site:bilibili.com OR site:b23.tv)",douyin:"site:douyin.com",kuaishou:"(site:kuaishou.com OR site:gifshow.com)",xiaohongshu:"(site:xiaohongshu.com OR site:xhslink.com)",other:"-site:youtube.com -site:bilibili.com -site:douyin.com"};
   const q=query+" 马术 视频 "+(domains[platform]||"");
   try{
-    const response=await fetch("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q),{headers:{"User-Agent":"Mozilla/5.0 (compatible; ZizaiHorseLibrary/1.0)","Accept":"text/html"},signal:AbortSignal.timeout(15000)});
-    if(!response.ok)throw new Error("公开搜索服务暂时不可用（"+response.status+"）。");
-    const html=await response.text();
-    let results=parseSearchHtml(html);
+    let results=[],provider="",failures=[];
+    try{
+      const response=await fetch("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q),{headers:{"User-Agent":"Mozilla/5.0 (compatible; ZizaiHorseLibrary/1.0)","Accept":"text/html"},signal:AbortSignal.timeout(10000)});
+      if(!response.ok)throw new Error("DuckDuckGo HTTP "+response.status);
+      results=parseSearchHtml(await response.text());if(!results.length)throw new Error("DuckDuckGo 未返回可解析结果");provider="DuckDuckGo";
+    }catch(e){failures.push("DuckDuckGo: "+e.message);}
+    if(!results.length){
+      try{
+        const response=await fetch("https://www.bing.com/search?format=rss&q="+encodeURIComponent(q),{headers:{"User-Agent":"Mozilla/5.0 (compatible; ZizaiHorseLibrary/1.0)","Accept":"application/rss+xml,application/xml,text/xml"},signal:AbortSignal.timeout(12000)});
+        if(!response.ok)throw new Error("Bing RSS HTTP "+response.status);
+        const xml=await response.text();
+        results=[...xml.matchAll(/<item>([\\s\\S]*?)<\\/item>/gi)].map(m=>{
+          const part=m[1],get=t=>decodeSearchHtml((part.match(new RegExp("<"+t+">([\\s\\S]*?)<\\/"+t+">","i"))||[])[1]||"");
+          const url=get("link"),title=get("title"),snippet=get("description");let domain="";try{domain=new URL(url).hostname.replace(/^www\\./,"");}catch{}
+          return {title,url,snippet,domain,platform:identifyVideoPlatform(url)};
+        }).filter(x=>x.url);
+        if(!results.length)throw new Error("Bing RSS 未返回可解析结果");provider="Bing RSS";
+      }catch(e){failures.push("Bing: "+e.message);}
+    }
     const seen=new Set();
-    results=results.filter(x=>x.url&&/^https?:\/\//i.test(x.url)&&!seen.has(x.url)&&seen.add(x.url));
+    results=results.filter(x=>x.url&&/^https?:\\/\\//i.test(x.url)&&!seen.has(x.url)&&seen.add(x.url));
     if(platform!=="all"&&platform!=="other")results=results.filter(x=>x.platform===platform);
     if(platform==="other")results=results.filter(x=>x.platform==="web");
-    res.json({ok:true,provider:"DuckDuckGo 公开网页索引",results:results.slice(0,15)});
+    if(!results.length&&failures.length===2)throw new Error("搜索服务均不可用；"+failures.join("；"));
+    res.json({ok:true,provider:provider+" 公开网页索引",results:results.slice(0,15),warning:failures.length?failures.join("；"):""});
   }catch(e){console.error("search-videos:",e);res.status(502).json({error:e.message||"联网搜索失败，请稍后重试。"});}
 });
 
