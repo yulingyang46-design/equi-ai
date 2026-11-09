@@ -26,3 +26,11 @@ export async function analyzeVideo({mediaId,prompt="请分析这段马术教学�
 export async function checkAI(){return request("/api/health");}
 
 export async function searchVideos({query,platform="all"}){return request("/api/search-videos?q="+encodeURIComponent(query)+"&platform="+encodeURIComponent(platform),{method:"GET"});}
+
+export async function analyzeUpload({file,prompt="请分析这份马术学习资料",context=""}){
+  if(!file)throw new Error("请先选择文件。");
+  const form=new FormData();form.append("file",file,file.name||"learning-material");
+  form.append("prompt",prompt);form.append("context",context);
+  const path=file.type.startsWith("video/")?"/api/analyze-video-file":"/api/analyze-file";
+  return request(path,{method:"POST",body:form});
+}
