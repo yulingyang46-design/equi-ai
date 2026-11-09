@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node index.mjs"
+    "start": "node index.mjs",
+    "check": "node --check index.mjs && node --input-type=module -e \"await import('@google/genai'); await import('mammoth'); await import('pdf-parse')\""
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
