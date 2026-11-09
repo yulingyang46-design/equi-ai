@@ -13,6 +13,7 @@
 | `GEMINI_API_KEY` | Google AI Studio 创建的 Gemini API Key，必须作为平台 Secret 保存 |
 | `APP_ACCESS_TOKEN` | 你自己生成的一串长随机访问令牌，必须作为平台 Secret 保存 |
 | `GEMINI_MODEL` | 默认 `gemini-3.8-flash` |
+| `GEMINI_FALLBACK_MODEL` | 可选备用 Gemini 模型 ID；主模型遇到 503/429/临时服务错误并重试 3 次仍失败时启用；必须是当前 API Key 有权限调用的模型 |
 | `MAX_VIDEO_MB` | 服务端允许上传的视频大小，默认 200 |
 | `ALLOWED_ORIGINS` | Android Capacitor 默认来源为 `https://localhost` |
 
@@ -28,6 +29,10 @@
 6. 部署成功后复制平台分配的 HTTPS 服务地址。
 
 服务端健康检查地址为 `https://你的服务地址/api/health`，但需要在请求头中携带访问令牌。
+
+## 模型临时故障恢复
+
+Gemini 文本/视频/文件推理统一采用临时故障重试：遇到 408、425、429、500、502、503、504 或模型繁忙/限流等可重试错误，最多尝试 3 次（递增等待）。若仍失败且设置了 `GEMINI_FALLBACK_MODEL`，服务端会自动使用备用模型再尝试；未设置备用模型时会返回明确错误，提示可配置备用模型。模型名称必须以 Google AI Studio 当前项目可用模型为准，不要照抄示例猜测模型 ID。此机制不能绕过配额耗尽、密钥权限错误或长期服务故障。
 
 ## 在 EquiAI 中连接
 
