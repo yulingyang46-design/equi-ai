@@ -49,6 +49,19 @@ app.use("/api", (req,res,next)=>{
   next();
 });
 app.get("/api/health",(req,res)=>{const q=provider()==="qwen";res.json({ok:true,service:"EquiAI AI service",provider:provider(),configured:q?qwenConfigured():Boolean(process.env.GEMINI_API_KEY),model:modelName()});});
+app.post("/api/test-ai",async(req,res)=>{
+  try{
+    let output="";
+    if(provider()==="qwen")output=await qwenChat("请只回复：AI 推理测试成功");
+    else{
+      const result=await client().models.generateContent({model:modelName(),contents:"请只回复：AI 推理测试成功"});
+      output=result.text||"";
+    }
+    if(!output.trim())throw new Error("模型没有返回内容。");
+    res.json({ok:true,configured:true,provider:provider(),model:modelName(),text:output.trim()});
+  }catch(e){console.error("test-ai:",e);res.status(502).json({error:"AI 服务端在线，但模型实际调用失败："+(e.message||"未知错误")});}
+});
+
 app.post("/api/analyze",async(req,res)=>{
   try{
     const {text="",task="分析并整理马术学习资料",language="中文",context=""}=req.body||{};
