@@ -98,3 +98,13 @@ APK SHA-256：`d50d541dc8b3fe854a3cc9220add00d9d0429a9ee3abbd5783559c3745be92cf`
 - 代码提交：`b2bcc594bfffbb2ad8ece4bc42a957e1c5f2d8b9`（服务端）；文档提交：`14fe55548d222207133ed3e963e24aefbd171c9c`。
 - GitHub Actions 安卓构建运行：42634745436，当前状态待完成；链接：https://github.com/yulingyang46-design/equi-ai/actions/runs/42634745436。
 - 注意：自动备用模型需要在 Render 等后端服务的 Environment 中新增 `GEMINI_FALLBACK_MODEL` 并填写已在 Google AI Studio 确认可用的模型 ID；此变量不能写入 APK 或 GitHub 源码。当前尚未验证真实模型调用、Render 自动部署或实体手机端表现。
+
+
+## 2026-11-09：修复 Gemini 实际推理递归溢出
+- 用户在 APP 的“测试 AI 实际推理”中遇到：`Maximum call stack size exceeded`，同时服务端在线。
+- 根因已在 `server/index.mjs` 的 `generateGeminiContent()` 中定位：重试包装函数内部错误地再次调用自身，造成无限递归。
+- 已修复为调用 Gemini SDK：`ai.models.generateContent({...request,model})`。
+- 修复提交：`35163f26874f970307531072db84465aa1863cb5`（分支 `android-v2-online-search`）。
+- 代码层已核对：递归调用字符串已不存在，SDK 调用已写入。
+- 待验证：GitHub Actions 构建结果、Render 是否部署该提交、Render Live 后 APP 的真实 AI 推理结果。静态代码修复不等于真实模型调用已通过。
+- 本次只改服务端代码，不需要重新安装 APK；国内 Qwen 分支未修改。
