@@ -1,4 +1,5 @@
 import { Browser } from "@capacitor/browser";
+import { AppLauncher } from "@capacitor/app-launcher";
 import { Capacitor } from "@capacitor/core";
 
 const PLATFORMS = [
@@ -21,11 +22,22 @@ export function detectPlatform(rawUrl) {
 export async function openVideoSource(rawUrl) {
   const url = new URL(rawUrl);
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("Only HTTP(S) links are supported");
+
   if (Capacitor.isNativePlatform()) {
-    // Opens the original URL in Android Custom Tabs. Android may route verified App Links to an installed official app.
+    // Use Android ACTION_VIEW via AppLauncher so verified platform App Links can open the exact video in its native app.
+    // Keep the complete URL unchanged, including video ID, query parameters and timestamps.
+    try {
+      const result = await AppLauncher.openUrl({ url: url.href });
+      if (result.completed) {
+        return { opened: true, method: "native-app-link", platform: detectPlatform(url.href) };
+      }
+    } catch {
+      // Fall back to the system browser if no app can handle the URL.
+    }
     await Browser.open({ url: url.href, toolbarColor: "#173d32" });
-    return { opened: true, method: "system-browser", platform: detectPlatform(url.href) };
+    return { opened: true, method: "system-browser-fallback", platform: detectPlatform(url.href) };
   }
+
   const opened = window.open(url.href, "_blank", "noopener,noreferrer");
   if (!opened) window.location.assign(url.href);
   return { opened: true, method: "browser", platform: detectPlatform(url.href) };
