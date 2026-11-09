@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { GoogleGenAI, createPartFromUri, createUserContent } from "@google/genai";
 import mammoth from "mammoth";
+import pdfParse from "pdf-parse";
 
 const app=express();
 const port=Number(process.env.PORT||8080);
@@ -64,7 +65,7 @@ app.post("/api/analyze-url",async(req,res)=>{
     let parsed;try{parsed=new URL(url);}catch{return res.status(400).json({error:"视频链接格式无效。"});}
     if(!["http:","https:"].includes(parsed.protocol))return res.status(400).json({error:"仅支持 HTTP 或 HTTPS 链接。"});
     const result=await client().models.generateContent({
-      model:process.env.GEMINI_MODEL||"gemini-3.8-flash",
+      model:modelName(),
       contents:system+"\n\n请尝试读取下方公开视频页面可访问的文字、说明和字幕线索，并完成任务："+task+"。背景："+context+"。如果无法读取视频画面或完整字幕，必须明确说明，不得假装看过视频。\n来源链接："+parsed.href,
       config:{tools:[{urlContext:{}}]}
     });
@@ -76,6 +77,12 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   if(!file)return res.status(400).json({error:"没有收到视频文件。"});
   let ai, remote;
   try{
+    if(provider()==="qwen"){
+      if(file.size>7*1024*1024)throw new Error("国内版当前直传视频上限为 7 MB；更大的视频需要配置阿里云 OSS 中转后再分析。");
+      const mime=file.mimetype||"video/mp4",data=await fs.readFile(file.path),url="data:"+mime+";base64,"+data.toString("base64");
+      const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\\n\\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\\n背景："+String(req.body?.context||"")+"\\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
+      return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
+    }
     ai=client();
     const mime=req.file.mimetype||"video/mp4";
     remote=await ai.files.upload({file:file.path,config:{mimeType:mime}});
@@ -110,9 +117,20 @@ app.post("/api/analyze-file",upload.single("file"),async(req,res)=>{
       const parsed=await mammoth.extractRawText({path:file.path});source=parsed.value||"";
       if(!source.trim())throw new Error("未能从 DOCX 文档提取到文字。");
     }else if(mime==="application/pdf"||/\.pdf$/i.test(name)||mime.startsWith("image/")){
+      if(provider()==="qwen"){
+        if(mime.startsWith("image/")){
+          if(file.size>10*1024*1024)throw new Error("国内版图片暂限 10 MB，请压缩图片后重试。");
+          const data=await fs.readFile(file.path),url="data:"+mime+";base64,"+data.toString("base64");
+          const output=await qwenChat([{type:"image_url",image_url:{url}},{type:"text",text:system+"\\n\\n任务："+prompt+"\\n背景："+context+"\\n请识别图片内容并进行马术学习分析。"}]);
+          return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
+        }
+        const pdf=await pdfParse(await fs.readFile(file.path));source=pdf.text||"";
+        if(!source.trim())throw new Error("该 PDF 未提取到可搜索文字；扫描版 PDF 图片 OCR 暂未接入国内服务。");
+      }else{
       ai=client();remote=await ai.files.upload({file:file.path,config:{mimeType:mime}});
       const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请识别并分析文件内容；对看不清或无法确认的信息明确标记，不要臆测。"])});
       return res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
+      }
     }else{
       return res.status(415).json({error:"暂不支持此文件类型。请使用图片、PDF、DOCX、TXT、MD 或 CSV。"});
     }
