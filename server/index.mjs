@@ -24,6 +24,20 @@ const system=`You are EquiAI, a careful equestrian learning assistant. Answer in
 For M entries use: ## M编号 标题; 一句话定义; 适用场景; 核心要点; 操作步骤 (optional); 注意事项; 关联词条. M65–M67 clinical entries use 临床定义; 场景; at least five 排查处置 steps; 易错点; 关联词条. Lameness workflow: 静立→直线慢步/快步→转弯/圆圈→硬地对比→屈曲试验; distinguish front-limb head nod from hind-limb croup drop.
 For R entries, match R22 practical depth: 适用对象; 核心宗旨; 前置硬性要求; 单次操作时长; 操作步骤. Give tools, handler position, action, frequency, numbers and assessment standards. R48 career path must remain 助教→初级教练→中级教练→高级/主教练→技术总监.
 For horse health, medication, lameness and riding safety, state evidence limits and risks; never present model output as diagnosis or treatment instructions.`;
+
+const provider=()=>String(process.env.AI_PROVIDER||"gemini").toLowerCase();
+function qwenConfigured(){return Boolean(process.env.DASHSCOPE_API_KEY);}
+async function qwenChat(content){
+  if(!qwenConfigured())throw new Error("国内 AI 服务尚未配置 DASHSCOPE_API_KEY。");
+  const base=(process.env.DASHSCOPE_BASE_URL||"https://dashscope.aliyuncs.com/compatible-mode/v1").replace(/\/$/,"");
+  const response=await fetch(base+"/chat/completions",{method:"POST",headers:{"Authorization":"Bearer "+process.env.DASHSCOPE_API_KEY,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.DASHSCOPE_MODEL||"qwen3.8-flash",messages:[{role:"system",content:system},{role:"user",content}]}),signal:AbortSignal.timeout(300000)});
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(body.error?.message||body.message||("百炼请求失败（HTTP "+response.status+"）"));
+  const value=body.choices?.[0]?.message?.content;
+  return Array.isArray(value)?value.map(x=>x.text||"").join("\n"):String(value||"");
+}
+function modelName(){return provider()==="qwen"?(process.env.DASHSCOPE_MODEL||"qwen3.8-flash"):(process.env.GEMINI_MODEL||"gemini-3.8-flash");}
+
 function client(){if(!process.env.GEMINI_API_KEY)throw new Error("服务端尚未配置 GEMINI_API_KEY。");return new GoogleGenAI({apiKey:process.env.GEMINI_API_KEY});}
 app.use("/api", (req,res,next)=>{
   if(req.path==="/health")return next();
@@ -33,14 +47,15 @@ app.use("/api", (req,res,next)=>{
   if(supplied!==expected)return res.status(401).json({error:"访问令牌无效，请检查应用设置。"});
   next();
 });
-app.get("/api/health",(req,res)=>res.json({ok:true,service:"EquiAI AI service",configured:Boolean(process.env.GEMINI_API_KEY),model:process.env.GEMINI_MODEL||"gemini-3.8-flash"}));
+app.get("/api/health",(req,res)=>{const q=provider()==="qwen";res.json({ok:true,service:"EquiAI AI service",provider:provider(),configured:q?qwenConfigured():Boolean(process.env.GEMINI_API_KEY),model:modelName()});});
 app.post("/api/analyze",async(req,res)=>{
   try{
     const {text="",task="分析并整理马术学习资料",language="中文",context=""}=req.body||{};
     if(!String(text).trim())return res.status(400).json({error:"请先提供字幕或教学文字。"});
     if(String(text).length>180000)return res.status(413).json({error:"文本过长，请分段处理。"});
-    const result=await client().models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:system+"\n\n任务："+task+"\n输出语言："+language+"\n补充背景："+context+"\n\n原始资料：\n"+text});
-    res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
+    if(provider()==="qwen"){const output=await qwenChat("任务："+task+"\n输出语言："+language+"\n补充背景："+context+"\n\n原始资料：\n"+text);return res.json({ok:true,provider:"qwen",model:modelName(),text:output});}
+    const result=await client().models.generateContent({model:modelName(),contents:system+"\n\n任务："+task+"\n输出语言："+language+"\n补充背景："+context+"\n\n原始资料：\n"+text});
+    res.json({ok:true,model:modelName(),text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze:",e);res.status(502).json({error:e.message||"AI 分析失败，请稍后重试。"});}
 });
 app.post("/api/analyze-url",async(req,res)=>{
