@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { GoogleGenAI, createPartFromUri, createUserContent } from "@google/genai";
+import mammoth from "mammoth";
 
 const app=express();
 const port=Number(process.env.PORT||8080);
@@ -74,6 +75,37 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
     const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请按时间顺序整理：画面内容、骑手动作、马匹反应、教学要点、可能错误、纠正建议、无法确认之处。不要臆测画面看不清的细节。"])});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze-video:",e);res.status(502).json({error:e.message||"视频分析失败。"});}
+  finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
+});
+
+
+app.post("/api/analyze-file",upload.single("file"),async(req,res)=>{
+  const file=req.file;if(!file)return res.status(400).json({error:"没有收到文件。"});
+  let ai,remote;
+  try{
+    const name=String(file.originalname||"").toLowerCase();
+    const mime=file.mimetype||"application/octet-stream";
+    const prompt=String(req.body?.prompt||"分析这份马术学习资料");
+    const context=String(req.body?.context||"");
+    let source="";
+    if(/\.(txt|md|csv)$/i.test(name)||mime.startsWith("text/")){
+      if(file.size>10*1024*1024)throw new Error("文本文件超过 10 MB，请拆分后再上传。");
+      source=await fs.readFile(file.path,"utf8");
+    }else if(/\.docx$/i.test(name)||mime.includes("wordprocessingml")){
+      const parsed=await mammoth.extractRawText({path:file.path});source=parsed.value||"";
+      if(!source.trim())throw new Error("未能从 DOCX 文档提取到文字。");
+    }else if(mime==="application/pdf"||/\.pdf$/i.test(name)||mime.startsWith("image/")){
+      ai=client();remote=await ai.files.upload({file:file.path,config:{mimeType:mime}});
+      const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请识别并分析文件内容；对看不清或无法确认的信息明确标记，不要臆测。"])});
+      return res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
+    }else{
+      return res.status(415).json({error:"暂不支持此文件类型。请使用图片、PDF、DOCX、TXT、MD 或 CSV。"});
+    }
+    if(!source.trim())throw new Error("文件中没有可分析的文字内容。");
+    if(source.length>180000)source=source.slice(0,180000)+"\n[内容过长，已截取前 180000 字符]";
+    const result=await client().models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:system+"\n\n任务："+prompt+"\n背景："+context+"\n\n文档原文：\n"+source});
+    res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
+  }catch(e){console.error("analyze-file:",e);res.status(502).json({error:e.message||"文件分析失败。"});}
   finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
 });
 
