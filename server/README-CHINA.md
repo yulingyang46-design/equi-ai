@@ -9,7 +9,7 @@
 - `DASHSCOPE_API_KEY=你的百炼 API Key`
 - `DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`（北京地域默认示例；API Key、模型、Base URL 必须属于同一地域/业务空间）
 - `DASHSCOPE_MODEL=qwen3.8-flash`
-- `APP_ACCESS_TOKEN=自行生成的长随机令牌`
+- `OSS_REGION=oss-cn-beijing`（示例，按 Bucket 实际地域填写）\n- `OSS_BUCKET=你的私有 Bucket 名称`\n- `OSS_ACCESS_KEY_ID=仅服务端使用的 RAM 访问密钥 ID`\n- `OSS_ACCESS_KEY_SECRET=仅服务端使用的 RAM 访问密钥 Secret`\n- `OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com`（可选，按地域调整）\n- `MAX_VIDEO_MB=200`\n- `APP_ACCESS_TOKEN=自行生成的长随机令牌`
 - `ALLOWED_ORIGINS=`（按部署域名配置；不要把密钥写进 APK）
 
 如使用工作空间地域专属域名，请在百炼控制台确认工作空间 ID、地域与对应 API Key，并将完整 compatible-mode Base URL 配置到 `DASHSCOPE_BASE_URL`。
@@ -19,7 +19,7 @@
 | 输入 | 国内 Qwen 路径 | 当前限制 |
 |---|---|---|
 | 本地图片 | 图片 Base64 多模态请求 | 单张暂限 10 MB |
-| 本地视频 | 视频 Base64 多模态请求 | 原始文件暂限 7 MB；超过需接入 OSS 中转 |
+| 本地视频 | 视频 Base64 多模态请求；大文件通过阿里云 OSS 私有临时对象与 1 小时签名 URL 中转 | 默认服务器上传上限 200 MB；≤7 MB 可直传 Base64，>7 MB 需要配置 OSS |
 | 直接视频文件 URL | Qwen 视频 URL 输入 | 必须是模型服务端可公开访问的直接视频文件 URL |
 | 普通网页/平台链接 | 服务端尝试读取网页文字，再交给模型分析 | 不代表已读取视频画面；平台反爬、登录、地区限制可能导致读不到 |
 | PDF | 提取可搜索文字后交给模型 | 扫描版/图片型 PDF OCR 尚未接入国内路径 |
@@ -44,7 +44,7 @@
 
 - [ ] 在中国大陆网络部署并确认 `/api/health` 返回 `provider=qwen`、`configured=true`。
 - [ ] 使用真实百炼 Key 完成文本、图片、视频、PDF、DOCX、直接视频 URL 的实际推理测试。
-- [ ] 完成 OSS 视频中转（目标：常见手机视频可上传，不再受 7 MB Base64 限制）。
+- [x] 已实现 OSS 私有临时对象上传、签名 URL 传递和分析结束后主动删除；仍需真实 Bucket 凭据进行端到端实测。
 - [ ] 接入扫描 PDF OCR / 图文 PDF 处理。
 - [ ] 实测 Bilibili、抖音、快手、小红书等平台搜索结果与原始出处直达；不可用的平台明确标注。
 - [ ] 在大陆 Android 设备验证上传、切换区域、页面切换、保存和长视频等待/失败恢复。
