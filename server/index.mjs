@@ -6,6 +6,8 @@ import path from "node:path";
 import { GoogleGenAI, createPartFromUri, createUserContent } from "@google/genai";
 import mammoth from "mammoth";
 import pdfParse from "pdf-parse";
+import OSS from "ali-oss";
+import { randomUUID } from "node:crypto";
 
 const app=express();
 const port=Number(process.env.PORT||8080);
@@ -27,6 +29,11 @@ For R entries, match R22 practical depth: 适用对象; 核心宗旨; 前置硬�
 For horse health, medication, lameness and riding safety, state evidence limits and risks; never present model output as diagnosis or treatment instructions.`;
 
 const provider=()=>String(process.env.AI_PROVIDER||"gemini").toLowerCase();
+function ossClient(){
+  const {OSS_REGION,OSS_BUCKET,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET}=process.env;
+  if(!OSS_REGION||!OSS_BUCKET||!OSS_ACCESS_KEY_ID||!OSS_ACCESS_KEY_SECRET)return null;
+  return new OSS({region:OSS_REGION,bucket:OSS_BUCKET,accessKeyId:OSS_ACCESS_KEY_ID,accessKeySecret:OSS_ACCESS_KEY_SECRET,secure:true,endpoint:process.env.OSS_ENDPOINT||undefined});
+}
 function qwenConfigured(){return Boolean(process.env.DASHSCOPE_API_KEY);}
 async function qwenChat(content){
   if(!qwenConfigured())throw new Error("国内 AI 服务尚未配置 DASHSCOPE_API_KEY。");
@@ -101,9 +108,17 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   let ai, remote;
   try{
     if(provider()==="qwen"){
-      if(file.size>7*1024*1024)throw new Error("国内版当前直传视频上限为 7 MB；更大的视频需要配置阿里云 OSS 中转后再分析。");
-      const ext=path.extname(file.originalname||"").toLowerCase(),mime=(file.mimetype&&file.mimetype!=="application/octet-stream")?file.mimetype:({".mp4":"video/mp4",".mov":"video/quicktime",".m4v":"video/mp4",".webm":"video/webm",".avi":"video/x-msvideo",".mkv":"video/x-matroska"}[ext]||"video/mp4"),data=await fs.readFile(file.path),url="data:"+mime+";base64,"+data.toString("base64");
-      const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\n\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\n背景："+String(req.body?.context||"")+"\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
+      const ext=path.extname(file.originalname||"").toLowerCase(),mime=(file.mimetype&&file.mimetype!=="application/octet-stream")?file.mimetype:({".mp4":"video/mp4",".mov":"video/quicktime",".m4v":"video/mp4",".webm":"video/webm",".avi":"video/x-msvideo",".mkv":"video/x-matroska"}[ext]||"video/mp4");
+      let url="";
+      if(file.size<=7*1024*1024){const data=await fs.readFile(file.path);url="data:"+mime+";base64,"+data.toString("base64");}
+      else{
+        oss=ossClient();
+        if(!oss)throw new Error("国内视频超过 7 MB，需要在国内服务端配置阿里云 OSS（Bucket、地域和服务端密钥）；当前服务器尚未配置大文件中转。");
+        ossKey="equi-ai-tmp/"+randomUUID()+(ext||".mp4");
+        await oss.put(ossKey,file.path,{headers:{"Content-Type":mime}});
+        url=oss.signatureUrl(ossKey,{expires:3600});
+      }
+      const output=await qwenChat([{type:"video_url",video_url:{url},fps:2},{type:"text",text:system+"\\n\\n任务："+String(req.body?.prompt||"请分析马术教学视频")+"\\n背景："+String(req.body?.context||"")+"\\n按时间顺序分析画面、骑手动作、马匹反应、节奏路线、可能错误与纠正建议；明确无法确认之处。"}]);
       return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
     }
     ai=client();
@@ -120,7 +135,7 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
     const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请按时间顺序整理：画面内容、骑手动作、马匹反应、教学要点、可能错误、纠正建议、无法确认之处。不要臆测画面看不清的细节。"])});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze-video:",e);res.status(502).json({error:e.message||"视频分析失败。"});}
-  finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
+  finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});if(oss&&ossKey)await oss.delete(ossKey).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
 });
 
 
