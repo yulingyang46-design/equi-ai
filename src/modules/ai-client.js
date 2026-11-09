@@ -9,7 +9,7 @@ async function request(path,options={}){
   const base=getAIEndpoint();
   if(!base)throw new Error("尚未配置安全 AI 服务端地址。请在「设置」中填写部署后的服务端地址；不要填写 API 密钥。");
   let response;
-  try{const headers=new Headers(options.headers||{});const token=getAIAccessToken();if(token)headers.set("Authorization","Bearer "+token);response=await fetch(base+path,{...options,headers});}catch(e){throw new Error("无法连接 AI 服务端，请检查网络和服务端地址。");}
+  try{const headers=new Headers(options.headers||{});const token=getAIAccessToken();if(token)headers.set("Authorization","Bearer "+token);response=await fetch(base+path,{...options,headers});}catch(e){throw new Error("无法连接 AI 服务端："+(e?.message||"网络请求失败")+"。请检查网络、服务端地址及跨域配置。");}
   const body=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(body.error||("AI 服务请求失败（"+response.status+"）"));
   return body;
