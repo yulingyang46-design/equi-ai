@@ -29,8 +29,8 @@ export async function searchVideos({query,platform="all"}){return request("/api/
 
 export async function analyzeUpload({file,prompt="请分析这份马术学习资料",context=""}){
   if(!file)throw new Error("请先选择文件。");
-  const form=new FormData();form.append("file",file,file.name||"learning-material");
+  const isVideo=file.type.startsWith("video/");const form=new FormData();form.append(isVideo?"video":"file",file,file.name||"learning-material");
   form.append("prompt",prompt);form.append("context",context);
-  const path=file.type.startsWith("video/")?"/api/analyze-video-file":"/api/analyze-file";
+  const path=isVideo?"/api/analyze-video":"/api/analyze-file";
   return request(path,{method:"POST",body:form});
 }
