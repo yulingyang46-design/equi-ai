@@ -1,6 +1,6 @@
 {
-  "appId": "com.equiai.app",
-  "appName": "EquiAI",
+  "appId": "com.zizai.horse.library",
+  "appName": "仔仔的马术库",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
