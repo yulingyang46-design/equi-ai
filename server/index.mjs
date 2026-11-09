@@ -47,6 +47,39 @@ async function qwenChat(content){
 function modelName(){return provider()==="qwen"?(process.env.DASHSCOPE_MODEL||"qwen3.8-flash"):(process.env.GEMINI_MODEL||"gemini-3.8-flash");}
 
 function client(){if(!process.env.GEMINI_API_KEY)throw new Error("服务端尚未配置 GEMINI_API_KEY。");return new GoogleGenAI({apiKey:process.env.GEMINI_API_KEY});}
+
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function isTemporaryModelError(error){
+  const status=Number(error?.status||error?.statusCode||error?.code||error?.response?.status||0);
+  const message=String(error?.message||error||"").toLowerCase();
+  return [408,425,429,500,502,503,504].includes(status) ||
+    /high demand|temporarily unavailable|resource exhausted|rate.?limit|overloaded|service unavailable|\b503\b|\b429\b|\b502\b|\b504\b/.test(message);
+}
+async function generateGeminiContent(ai, request){
+  const primary=modelName();
+  const fallback=String(process.env.GEMINI_FALLBACK_MODEL||"").trim();
+  const candidates=[primary,...(fallback&&fallback!==primary?[fallback]:[])];
+  let lastError;
+  for(let modelIndex=0;modelIndex<candidates.length;modelIndex++){
+    const model=candidates[modelIndex];
+    for(let attempt=1;attempt<=3;attempt++){
+      try{
+        const result=await generateGeminiContent(ai,{...request,model});
+        if(model!==primary)console.warn("Gemini fallback model succeeded:",model);
+        return result;
+      }catch(error){
+        lastError=error;
+        if(!isTemporaryModelError(error))throw error;
+        console.warn("Gemini temporary model error:",{model,attempt,status:error?.status||error?.statusCode||error?.code,message:error?.message});
+        if(attempt<3)await sleep(attempt===1?1200:3000);
+      }
+    }
+    if(modelIndex<candidates.length-1)console.warn("Primary Gemini model unavailable; trying configured fallback:",candidates[modelIndex+1]);
+  }
+  const reason=String(lastError?.message||"模型暂时不可用");
+  if(candidates.length>1)throw new Error("主模型 "+primary+" 重试 3 次仍不可用；备用模型 "+fallback+" 也未能完成调用。最后错误："+reason);
+  throw new Error("模型 "+primary+" 连续重试 3 次仍不可用。可在服务端配置 GEMINI_FALLBACK_MODEL 启用备用模型。最后错误："+reason);
+}
 app.use("/api", (req,res,next)=>{
   if(req.path==="/health")return next();
   const expected=process.env.APP_ACCESS_TOKEN;
@@ -61,7 +94,7 @@ app.post("/api/test-ai",async(req,res)=>{
     let output="";
     if(provider()==="qwen")output=await qwenChat("请只回复：AI 推理测试成功");
     else{
-      const result=await client().models.generateContent({model:modelName(),contents:"请只回复：AI 推理测试成功"});
+      const result=await generateGeminiContent(client(),{model:modelName(),contents:"请只回复：AI 推理测试成功"});
       output=result.text||"";
     }
     if(!output.trim())throw new Error("模型没有返回内容。");
@@ -75,7 +108,7 @@ app.post("/api/analyze",async(req,res)=>{
     if(!String(text).trim())return res.status(400).json({error:"请先提供字幕或教学文字。"});
     if(String(text).length>180000)return res.status(413).json({error:"文本过长，请分段处理。"});
     if(provider()==="qwen"){const output=await qwenChat("任务："+task+"\n输出语言："+language+"\n补充背景："+context+"\n\n原始资料：\n"+text);return res.json({ok:true,provider:"qwen",model:modelName(),text:output});}
-    const result=await client().models.generateContent({model:modelName(),contents:system+"\n\n任务："+task+"\n输出语言："+language+"\n补充背景："+context+"\n\n原始资料：\n"+text});
+    const result=await generateGeminiContent(client(),{model:modelName(),contents:system+"\n\n任务："+task+"\n输出语言："+language+"\n补充背景："+context+"\n\n原始资料：\n"+text});
     res.json({ok:true,model:modelName(),text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze:",e);res.status(502).json({error:e.message||"AI 分析失败，请稍后重试。"});}
 });
@@ -94,7 +127,7 @@ app.post("/api/analyze-url",async(req,res)=>{
       const output=await qwenChat("请分析该链接页面实际可访问的文字："+task+"。背景："+context+"。若无法读取视频画面或字幕，必须明确说明，不得假装看过视频。链接："+parsed.href+"\n页面文字："+(pageText||"服务端未能读取网页正文。"));
       return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
     }
-    const result=await client().models.generateContent({
+    const result=await generateGeminiContent(client(),{
       model:modelName(),
       contents:system+"\n\n请尝试读取下方公开视频页面可访问的文字、说明和字幕线索，并完成任务："+task+"。背景："+context+"。如果无法读取视频画面或完整字幕，必须明确说明，不得假装看过视频。\n来源链接："+parsed.href,
       config:{tools:[{urlContext:{}}]}
@@ -132,7 +165,7 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
     if(String(remote.state)!=="ACTIVE")throw new Error("视频处理超时，请缩短视频或稍后重试。");
     const prompt=String(req.body?.prompt||"请分析马术教学视频");
     const context=String(req.body?.context||"");
-    const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请按时间顺序整理：画面内容、骑手动作、马匹反应、教学要点、可能错误、纠正建议、无法确认之处。不要臆测画面看不清的细节。"])});
+    const result=await generateGeminiContent(ai,{model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请按时间顺序整理：画面内容、骑手动作、马匹反应、教学要点、可能错误、纠正建议、无法确认之处。不要臆测画面看不清的细节。"])});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze-video:",e);res.status(502).json({error:e.message||"视频分析失败。"});}
   finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});if(oss&&ossKey)await oss.delete(ossKey).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
@@ -166,7 +199,7 @@ app.post("/api/analyze-file",upload.single("file"),async(req,res)=>{
         if(!source.trim())throw new Error("该 PDF 未提取到可搜索文字；扫描版 PDF 图片 OCR 暂未接入国内服务。");
       }else{
       ai=client();remote=await ai.files.upload({file:file.path,config:{mimeType:mime}});
-      const result=await ai.models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请识别并分析文件内容；对看不清或无法确认的信息明确标记，不要臆测。"])});
+      const result=await generateGeminiContent(ai,{model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:createUserContent([createPartFromUri(remote.uri,remote.mimeType),system+"\n\n任务："+prompt+"\n背景："+context+"\n请识别并分析文件内容；对看不清或无法确认的信息明确标记，不要臆测。"])});
       return res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
       }
     }else{
@@ -175,7 +208,7 @@ app.post("/api/analyze-file",upload.single("file"),async(req,res)=>{
     if(!source.trim())throw new Error("文件中没有可分析的文字内容。");
     if(source.length>180000)source=source.slice(0,180000)+"\n[内容过长，已截取前 180000 字符]";
     if(provider()==="qwen"){const output=await qwenChat("任务："+prompt+"\n背景："+context+"\n文档原文：\n"+source);return res.json({ok:true,provider:"qwen",model:modelName(),text:output});}
-    const result=await client().models.generateContent({model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:system+"\n\n任务："+prompt+"\n背景："+context+"\n\n文档原文：\n"+source});
+    const result=await generateGeminiContent(client(),{model:process.env.GEMINI_MODEL||"gemini-3.8-flash",contents:system+"\n\n任务："+prompt+"\n背景："+context+"\n\n文档原文：\n"+source});
     res.json({ok:true,model:process.env.GEMINI_MODEL||"gemini-3.8-flash",text:result.text||"",usage:result.usageMetadata||null});
   }catch(e){console.error("analyze-file:",e);res.status(502).json({error:e.message||"文件分析失败。"});}
   finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
