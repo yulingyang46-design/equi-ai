@@ -77,10 +77,10 @@ app.post("/api/analyze-video",upload.single("video"),async(req,res)=>{
   finally{if(ai&&remote?.name)await ai.files.delete({name:remote.name}).catch(()=>{});await fs.unlink(file.path).catch(()=>{});}
 });
 
-function decodeSearchHtml(value=""){return String(value).replace(/<[^>]*>/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&#(\\d+);/g,(_,n)=>String.fromCharCode(Number(n))).replace(/&#x([\\da-f]+);/gi,(_,n)=>String.fromCharCode(parseInt(n,16))).replace(/\\s+/g," ").trim();}
+function decodeSearchHtml(value=""){return String(value).replace(/<[^>]*>/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(Number(n))).replace(/&#x([\da-f]+);/gi,(_,n)=>String.fromCharCode(parseInt(n,16))).replace(/\s+/g," ").trim();}
 function unwrapSearchUrl(raw){try{const u=new URL(raw.startsWith("//")?"https:"+raw:raw);return u.searchParams.get("uddg")||u.href;}catch{return raw;}}
-function identifyVideoPlatform(raw){try{const h=new URL(raw).hostname.toLowerCase().replace(/^www\\./,"");if(h.includes("youtube.com")||h==="youtu.be")return "youtube";if(h.includes("bilibili.com")||h==="b23.tv")return "bilibili";if(h.includes("douyin.com"))return "douyin";if(h.includes("kuaishou.com")||h.includes("gifshow.com"))return "kuaishou";if(h.includes("xiaohongshu.com")||h.includes("xhslink.com"))return "xiaohongshu";return "web";}catch{return "web";}}
-function parseSearchHtml(html){const links=[...html.matchAll(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/gi)];const snippets=[...html.matchAll(/<(?:a|div)[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\\s\\S]*?)<\\/(?:a|div)>/gi)];return links.map((m,i)=>{const url=unwrapSearchUrl(m[1]);let domain="";try{domain=new URL(url).hostname.replace(/^www\\./,"");}catch{}return {title:decodeSearchHtml(m[2]),url,snippet:decodeSearchHtml(snippets[i]?.[1]||""),domain,platform:identifyVideoPlatform(url)};});}
+function identifyVideoPlatform(raw){try{const h=new URL(raw).hostname.toLowerCase().replace(/^www\./,"");if(h.includes("youtube.com")||h==="youtu.be")return "youtube";if(h.includes("bilibili.com")||h==="b23.tv")return "bilibili";if(h.includes("douyin.com"))return "douyin";if(h.includes("kuaishou.com")||h.includes("gifshow.com"))return "kuaishou";if(h.includes("xiaohongshu.com")||h.includes("xhslink.com"))return "xiaohongshu";return "web";}catch{return "web";}}
+function parseSearchHtml(html){const links=[...html.matchAll(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)];const snippets=[...html.matchAll(/<(?:a|div)[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/(?:a|div)>/gi)];return links.map((m,i)=>{const url=unwrapSearchUrl(m[1]);let domain="";try{domain=new URL(url).hostname.replace(/^www\./,"");}catch{}return {title:decodeSearchHtml(m[2]),url,snippet:decodeSearchHtml(snippets[i]?.[1]||""),domain,platform:identifyVideoPlatform(url)};});}
 app.get("/api/search-videos",async(req,res)=>{
   const query=String(req.query.q||"").trim().slice(0,160);
   if(!query)return res.status(400).json({error:"请输入视频搜索关键词。"});
@@ -93,7 +93,7 @@ app.get("/api/search-videos",async(req,res)=>{
     const html=await response.text();
     let results=parseSearchHtml(html);
     const seen=new Set();
-    results=results.filter(x=>x.url&&/^https?:\\/\\//i.test(x.url)&&!seen.has(x.url)&&seen.add(x.url));
+    results=results.filter(x=>x.url&&/^https?:\/\//i.test(x.url)&&!seen.has(x.url)&&seen.add(x.url));
     if(platform!=="all"&&platform!=="other")results=results.filter(x=>x.platform===platform);
     if(platform==="other")results=results.filter(x=>x.platform==="web");
     res.json({ok:true,provider:"DuckDuckGo 公开网页索引",results:results.slice(0,15)});
