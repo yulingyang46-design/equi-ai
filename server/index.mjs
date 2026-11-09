@@ -214,7 +214,7 @@ app.get("/api/search-videos",async(req,res)=>{
         if(!response.ok)throw new Error("Bing RSS HTTP "+response.status);
         const xml=await response.text();
         results=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(m=>{
-          const part=m[1],get=t=>decodeSearchHtml((part.match(new RegExp("<"+t+">([\s\S]*?)<\/"+t+">","i"))||[])[1]||"");
+          const part=m[1],get=t=>decodeSearchHtml((part.match(new RegExp("<"+t+">([\\s\\S]*?)</"+t+">","i"))||[])[1]||"");
           const url=get("link"),title=get("title"),snippet=get("description");let domain="";try{domain=new URL(url).hostname.replace(/^www\./,"");}catch{}
           return {title,url,snippet,domain,platform:identifyVideoPlatform(url)};
         }).filter(x=>x.url);
