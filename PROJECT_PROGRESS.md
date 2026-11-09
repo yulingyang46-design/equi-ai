@@ -86,3 +86,15 @@ APK SHA-256：`d50d541dc8b3fe854a3cc9220add00d9d0429a9ee3abbd5783559c3745be92cf`
 
 ## 换手机继续
 先打开本文件，再打开当前分支与上述 Actions Run。核对“尚未解决 / 下一步”和“重要安装提醒”，不要覆盖旧手机的本地资料，不要从旧 APK 重新开始。
+
+
+## 2026-11-09 Gemini 临时故障恢复更新
+
+- 新增统一 Gemini 推理调用包装：文本分析、链接分析、视频分析、文件/图片/PDF 分析及实际模型连通性测试均走统一重试逻辑。
+- 对 HTTP 408、425、429、500、502、503、504，以及模型繁忙/限流/暂时不可用等错误最多重试 3 次，等待间隔递增。
+- 新增可选服务端环境变量 `GEMINI_FALLBACK_MODEL`：主模型重试失败后，自动尝试该备用模型（同样最多 3 次）。备用模型必须是当前 Gemini API Key 有权限调用的有效模型 ID。
+- 未配置备用模型时仍会重试主模型；全部失败会返回更明确的错误，提示可配置备用模型。非临时错误（如密钥权限/参数错误）不会盲目重试。
+- 已更新 `server/README.md` 的环境变量和故障恢复说明。
+- 代码提交：`b2bcc594bfffbb2ad8ece4bc42a957e1c5f2d8b9`（服务端）；文档提交：`14fe55548d222207133ed3e963e24aefbd171c9c`。
+- GitHub Actions 安卓构建运行：42634745436，当前状态待完成；链接：https://github.com/yulingyang46-design/equi-ai/actions/runs/42634745436。
+- 注意：自动备用模型需要在 Render 等后端服务的 Environment 中新增 `GEMINI_FALLBACK_MODEL` 并填写已在 Google AI Studio 确认可用的模型 ID；此变量不能写入 APK 或 GitHub 源码。当前尚未验证真实模型调用、Render 自动部署或实体手机端表现。
