@@ -9,7 +9,13 @@
 - `DASHSCOPE_API_KEY=你的百炼 API Key`
 - `DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`（北京地域默认示例；API Key、模型、Base URL 必须属于同一地域/业务空间）
 - `DASHSCOPE_MODEL=qwen3.8-flash`
-- `OSS_REGION=oss-cn-beijing`（示例，按 Bucket 实际地域填写）\n- `OSS_BUCKET=你的私有 Bucket 名称`\n- `OSS_ACCESS_KEY_ID=仅服务端使用的 RAM 访问密钥 ID`\n- `OSS_ACCESS_KEY_SECRET=仅服务端使用的 RAM 访问密钥 Secret`\n- `OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com`（可选，按地域调整）\n- `MAX_VIDEO_MB=200`\n- `APP_ACCESS_TOKEN=自行生成的长随机令牌`
+- `OSS_REGION=oss-cn-beijing`（示例，按 Bucket 实际地域填写）
+- `OSS_BUCKET=你的私有 Bucket 名称`
+- `OSS_ACCESS_KEY_ID=仅服务端使用的 RAM 访问密钥 ID`
+- `OSS_ACCESS_KEY_SECRET=仅服务端使用的 RAM 访问密钥 Secret`
+- `OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com`（可选，按地域调整）
+- `MAX_VIDEO_MB=200`
+- `APP_ACCESS_TOKEN=自行生成的长随机令牌`
 - `ALLOWED_ORIGINS=`（按部署域名配置；不要把密钥写进 APK）
 
 如使用工作空间地域专属域名，请在百炼控制台确认工作空间 ID、地域与对应 API Key，并将完整 compatible-mode Base URL 配置到 `DASHSCOPE_BASE_URL`。
