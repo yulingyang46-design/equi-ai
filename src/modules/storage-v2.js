@@ -88,7 +88,7 @@ export async function exportTar(){
   for(const item of media){
     if(!item?.blob)continue;
     const path="media/"+String(index).padStart(6,"0")+".bin";
-    packed.push({id:item.id,name:item.name||"media",type:item.type||item.blob.type||"application/octet-stream",size:item.size||item.blob.size||0,savedAt:item.savedAt||"",path});
+    packed.push({id:item.id,name:item.name||"media",type:item.type||item.blob.type||"application/octet-stream",size:item.blob.size,savedAt:item.savedAt||"",path});
     parts.push(...tarEntry(path,item.blob));totalBytes+=item.blob.size;index++;
   }
   const manifest={app:"EquiAI",schemaVersion:4,exportedAt:new Date().toISOString(),records,knowledge,settings:settings.filter(x=>x.id!=="ai-endpoint"),media:packed};
