@@ -161,3 +161,9 @@ APK SHA-256：`d50d541dc8b3fe854a3cc9220add00d9d0429a9ee3abbd5783559c3745be92cf`
 - TAR 与旧 JSON 备份恢复均先完成数据解析/映射，再通过一个 IndexedDB readwrite transaction 批量写入媒体、学习记录和知识条目；任一写入失败会整体 abort，降低“部分导入成功”的风险。
 - TAR 恢复保留安全设置项的批量写入；AI 服务端地址/令牌和旧版迁移标记不随备份覆盖。
 - 当前仍需用浏览器/Android WebView 完成实际 TAR 导出→清空测试库→导入→逐条核对的往返验收；另需测试配额不足时事务回滚。未确认 Actions 构建通过或真机安装。
+
+
+## 2026-11-19 Android APK 构建结果
+- GitHub Actions run：44526439875；分支：hardening-ssrf-2026-11；构建代码提交：b515c5968d6d1fc6e9ac0b55b1fb6b8ed5914ddd。
+- 结果：Build job completed / success；JavaScript 语法检查、服务端依赖检查、Web 资源构建、Capacitor Android 项目生成与同步、Debug APK 构建、Artifact 上传均成功。
+- Artifact：EquiAI-debug-apk，APK 文件 4,166,061 bytes；artifact ID 14531106559。此为 Debug APK，未配置长期 release keystore；未进行实体 Android 设备安装/运行验收，不能视为正式发布签名版本。
