@@ -29,6 +29,18 @@ async function run(store,mode,fn){
 export async function all(store){const db=await openDB();try{return await request(db.transaction(store,"readonly").objectStore(store).getAll());}finally{db.close();}}
 export async function get(store,id){const db=await openDB();try{return await request(db.transaction(store,"readonly").objectStore(store).get(id));}finally{db.close();}}
 export async function put(store,value){return run(store,"readwrite",os=>os.put(value));}
+async function putMany(entries){
+  const db=await openDB();
+  try{
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction([...new Set(entries.map(x=>x[0]))],"readwrite");
+      for(const [store,value] of entries)tx.objectStore(store).put(value);
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error||new Error("恢复事务失败"));
+      tx.onabort=()=>reject(tx.error||new Error("恢复事务已取消"));
+    });
+  }finally{db.close();}
+}
 export async function remove(store,id){return run(store,"readwrite",os=>os.delete(id));}
 export async function clear(store){return run(store,"readwrite",os=>os.clear());}
 export async function saveMedia(file,meta={}){
@@ -145,11 +157,11 @@ async function importTarFile(file){
     const blob=mediaFiles.get(item.path);
     if(!blob||Number(item.size)!==blob.size)throw new Error("备份媒体文件缺失或大小不匹配："+item.name);
   }
-  const mediaMap=new Map();
+  const mediaMap=new Map(),writes=[];
   for(const item of (manifest.media||[])){
     const blob=mediaFiles.get(item.path);
     const id="import-media-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-    await put("media",{id,blob,name:item.name||"imported-media",type:item.type||blob.type,size:blob.size,savedAt:item.savedAt||new Date().toISOString()});
+    writes.push(["media",{id,blob,name:item.name||"imported-media",type:item.type||blob.type,size:blob.size,savedAt:item.savedAt||new Date().toISOString()}]);
     mediaMap.set(item.id,id);
   }
   let n=0;
@@ -157,19 +169,20 @@ async function importTarFile(file){
     if(!r||typeof r.title!=="string")continue;
     const mediaId=mediaMap.get(r.mediaId)||"";
     const mediaMissing=Boolean(r.legacyVideoMissing||((r.mediaId||r.localVideoId)&&!mediaId));
-    await put("records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId,legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()});
+    writes.push(["records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId,legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()}]);
     n++;
   }
   let kCount=0;
   for(const k of (manifest.knowledge||[])){
     if(!k||typeof k.title!=="string")continue;
-    await put("knowledge",{...k,id:"import-k-"+Date.now().toString(36)+"-"+kCount+"-"+Math.random().toString(36).slice(2,6)});
+    writes.push(["knowledge",{...k,id:"import-k-"+Date.now().toString(36)+"-"+kCount+"-"+Math.random().toString(36).slice(2,6)}]);
     kCount++;
   }
   for(const setting of manifest.settings||[]){
     if(!setting||typeof setting.id!=="string"||["ai-endpoint","ai-token","legacy-migrated"].includes(setting.id))continue;
-    await put("settings",setting);
+    writes.push(["settings",setting]);
   }
+  await putMany(writes);
   return {records:n,media:mediaMap.size,knowledge:kCount};
 }
 export async function importBackupFile(file){
@@ -195,26 +208,25 @@ export async function exportAll(){
 }
 export async function importAll(data){
   let n=0;
-  const mediaMap=new Map();
+  const mediaMap=new Map(),writes=[];
   for(const item of (data.media||[])){
     if(!item?.dataUrl||!item.id)continue;
     const id="import-media-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
     const blob=dataUrlToBlob(item.dataUrl);
-    await put("media",{id,blob,name:item.name||"imported-media",type:item.type||blob.type,size:item.size||blob.size,savedAt:item.savedAt||new Date().toISOString()});
+    writes.push(["media",{id,blob,name:item.name||"imported-media",type:item.type||blob.type,size:item.size||blob.size,savedAt:item.savedAt||new Date().toISOString()}]);
     mediaMap.set(item.id,id);
   }
   for(const r of (data.records||[])){
     if(!r||typeof r.title!=="string")continue;
     const mediaId=mediaMap.get(r.mediaId)||"";
     const mediaMissing=Boolean(r.legacyVideoMissing||((r.mediaId||r.localVideoId)&&!mediaId));
-    await put("records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId,legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()});
+    writes.push(["records",{...r,id:"import-"+Date.now().toString(36)+"-"+n+"-"+Math.random().toString(36).slice(2,6),mediaId,legacyVideoMissing:mediaMissing,updatedAt:new Date().toISOString()}]);
     n++;
   }
-  let kCount=0;
   for(const k of (data.knowledge||[])){
     if(!k||typeof k.title!=="string")continue;
-    await put("knowledge",{...k,id:"import-k-"+Date.now().toString(36)+"-"+kCount+"-"+Math.random().toString(36).slice(2,6)});
-    kCount++;
+    writes.push(["knowledge",{...k,id:"import-k-"+Date.now().toString(36)+"-"+writes.length+"-"+Math.random().toString(36).slice(2,6)}]);
   }
+  await putMany(writes);
   return n;
 }
