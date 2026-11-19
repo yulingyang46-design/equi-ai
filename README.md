@@ -11,7 +11,7 @@ EquiAI 是个人使用的安卓马术学习应用，目标是把视频来源、�
 - SRT / VTT 字幕导入为可选辅助输入，解析时间戳并关联到学习资料。
 - 国内/海外 AI 服务区域切换：两套服务端地址和访问令牌分别保存在本机，不互相覆盖；国内 Qwen 服务部署说明见 `server/README-CHINA.md`。
 - 资料分类、搜索、笔记、状态管理和知识条目编辑。
-- JSON 备份与合并导入；JSON 不包含视频二进制文件，视频单独导出。
+- TAR 完整备份与合并导入：视频以原始二进制条目保存，不做 Base64 转码；仍兼容旧版 JSON 备份导入。
 - 旧版 `equiAI_v1` 资料迁移；尝试迁移旧版 IndexedDB 本地视频。
 - 可配置 Gemini（海外）或 Qwen / 百炼（国内）服务端：文本、视频、图片、文档和链接分析路径；各模式的文件大小与可访问性限制见国内版说明。
 - 服务端使用 `GEMINI_API_KEY`，APK 仅保存服务端地址和应用访问令牌，不嵌入 Gemini 密钥。
@@ -28,7 +28,7 @@ EquiAI 是个人使用的安卓马术学习应用，目标是把视频来源、�
 - `index.html`：应用页面
 - `src/app.js`：界面交互与学习工作流
 - `src/styles.css`：移动端样式
-- `src/modules/storage-v2.js`：IndexedDB 存储与旧版迁移
+- `src/modules/storage-v2.js`：IndexedDB 存储、旧版迁移与 TAR/JSON 备份导入导出
 - `src/modules/subtitles.js`：SRT / VTT 字幕解析
 - `src/modules/ai-client.js`：安全服务端 API 客户端
 - `src/modules/knowledge.js`：马术知识整理规则
