@@ -40,11 +40,37 @@ function qwenConfigured(){return Boolean(process.env.DASHSCOPE_API_KEY);}
 async function qwenChat(content){
   if(!qwenConfigured())throw new Error("国内 AI 服务尚未配置 DASHSCOPE_API_KEY。");
   const base=(process.env.DASHSCOPE_BASE_URL||"https://dashscope.aliyuncs.com/compatible-mode/v1").replace(/\/$/,"");
-  const response=await fetch(base+"/chat/completions",{method:"POST",headers:{"Authorization":"Bearer "+process.env.DASHSCOPE_API_KEY,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.DASHSCOPE_MODEL||"qwen3.8-flash",messages:[{role:"system",content:system},{role:"user",content}]}),signal:AbortSignal.timeout(300000)});
-  const body=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(body.error?.message||body.message||("百炼请求失败（HTTP "+response.status+"）"));
-  const value=body.choices?.[0]?.message?.content;
-  return Array.isArray(value)?value.map(x=>x.text||"").join("\n"):String(value||"");
+  let lastError;
+  for(let attempt=1;attempt<=3;attempt++){
+    try{
+      const response=await fetch(base+"/chat/completions",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+process.env.DASHSCOPE_API_KEY,"Content-Type":"application/json"},
+        body:JSON.stringify({model:process.env.DASHSCOPE_MODEL||"qwen3.8-flash",messages:[{role:"system",content:system},{role:"user",content}]}),
+        signal:AbortSignal.timeout(300000)
+      });
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok){
+        const error=new Error(body.error?.message||body.message||("百炼请求失败（HTTP "+response.status+"）"));
+        error.status=response.status;
+        throw error;
+      }
+      const value=body.choices?.[0]?.message?.content;
+      const output=Array.isArray(value)?value.map(x=>x.text||"").join("\n"):String(value||"");
+      if(!output.trim())throw new Error("百炼模型返回了空内容。");
+      return output;
+    }catch(error){
+      lastError=error;
+      const message=String(error?.message||"").toLowerCase();
+      const temporary=isTemporaryModelError(error)||/timeout|timed out|fetch failed|socket hang up|econnreset|etimedout|throttl/.test(message);
+      if(!temporary||attempt===3)break;
+      const retryAfter=Number(error?.retryAfter||0);
+      const wait=retryAfter>0?Math.min(retryAfter*1000,15000):(attempt===1?1200:3000);
+      console.warn("Qwen temporary request failure; retrying:",{attempt,status:error?.status||0,message:error?.message});
+      await sleep(wait);
+    }
+  }
+  throw new Error("国内 AI 请求连续失败（最多重试 3 次）：" + String(lastError?.message||"未知错误"));
 }
 function modelName(){return provider()==="qwen"?(process.env.DASHSCOPE_MODEL||"qwen3.8-flash"):(process.env.GEMINI_MODEL||"gemini-3.8-flash");}
 function isPrivateAddress(address){
