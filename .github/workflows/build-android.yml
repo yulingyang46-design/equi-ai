@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: [android-apk, android-v2-complete, android-v2-online-search]
+    branches: [android-apk, android-v2-complete, android-v2-online-search, hardening-ssrf-2026-11]
     paths-ignore:
       - PROJECT_PROGRESS.md
       - README.md
