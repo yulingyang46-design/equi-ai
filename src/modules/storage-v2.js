@@ -96,6 +96,23 @@ export async function exportTar(){
   const allParts=[...tarEntry("backup.json",meta),...parts,new Uint8Array(1024)];
   return {blob:new Blob(allParts,{type:"application/x-tar"}),mediaCount:index,totalBytes};
 }
+function verifyTarHeader(header){
+  const text=new TextDecoder().decode(header);
+  const raw=text.slice(148,156).replace(/\0.*$/s,"").trim();
+  const expected=parseInt(raw,8);
+  if(!Number.isFinite(expected))throw new Error("备份 TAR 校验字段无效。");
+  let actual=0;
+  for(let i=0;i<512;i++)actual+=i>=148&&i<156?32:header[i];
+  if(actual!==expected)throw new Error("备份 TAR 校验失败，文件可能已损坏。");
+}
+function tarOctal(header,start,length){
+  const raw=new TextDecoder().decode(header.slice(start,start+length)).replace(/\0.*$/s,"").trim();
+  if(!raw)return 0;
+  if(!/^[0-7]+$/.test(raw))throw new Error("备份 TAR 数值字段无效。");
+  const value=parseInt(raw,8);
+  if(!Number.isSafeInteger(value)||value<0)throw new Error("备份 TAR 文件大小无效。");
+  return value;
+}
 async function importTarFile(file){
   const dec=new TextDecoder();
   let offset=0,manifest=null;
@@ -103,22 +120,36 @@ async function importTarFile(file){
   while(offset+512<=file.size){
     const header=new Uint8Array(await file.slice(offset,offset+512).arrayBuffer());
     if(header.every(x=>x===0))break;
+    verifyTarHeader(header);
     const name=dec.decode(header.slice(0,100)).replace(/\0.*$/s,"");
-    const sizeText=dec.decode(header.slice(124,136)).replace(/\0.*$/s,"").trim();
-    const size=parseInt(sizeText||"0",8);
-    if(!Number.isFinite(size)||size<0||offset+512+size>file.size)throw new Error("备份 TAR 文件结构损坏或不完整。");
+    const size=tarOctal(header,124,12);
+    if(offset+512+size>file.size)throw new Error("备份 TAR 文件结构损坏或不完整。");
     const start=offset+512,end=start+size;
-    if(name==="backup.json")manifest=JSON.parse(await file.slice(start,end).text());
-    else if(/^media\/[0-9]{6}\.bin$/.test(name))mediaFiles.set(name,file.slice(start,end));
+    if(name==="backup.json"){
+      if(manifest)throw new Error("备份中包含重复的清单文件。");
+      if(size>64*1024*1024)throw new Error("备份清单过大，已停止导入。");
+      try{manifest=JSON.parse(await file.slice(start,end).text());}catch{throw new Error("备份清单不是有效 JSON。");}
+    }else if(/^media\/[0-9]{6}\.bin$/.test(name)){
+      if(mediaFiles.has(name))throw new Error("备份中包含重复的媒体文件。");
+      mediaFiles.set(name,file.slice(start,end));
+    }else if(name.startsWith("/")||name.split("/").includes("..")){
+      throw new Error("备份包含不安全的文件路径。");
+    }
     offset=start+Math.ceil(size/512)*512;
   }
-  if(!manifest||manifest.app!=="EquiAI"||!Array.isArray(manifest.records))throw new Error("未找到有效的 EquiAI TAR 备份清单。");
+  if(!manifest||manifest.app!=="EquiAI"||!Array.isArray(manifest.records)||!Array.isArray(manifest.knowledge||[])||!Array.isArray(manifest.media||[])||!Array.isArray(manifest.settings||[]))throw new Error("未找到有效的 EquiAI TAR 备份清单。");
+  const declaredPaths=new Set();
+  for(const item of manifest.media||[]){
+    if(!item||typeof item.id!=="string"||!/^media\/[0-9]{6}\.bin$/.test(item.path)||declaredPaths.has(item.path))throw new Error("备份清单中的媒体索引无效。");
+    declaredPaths.add(item.path);
+    const blob=mediaFiles.get(item.path);
+    if(!blob||Number(item.size)!==blob.size)throw new Error("备份媒体文件缺失或大小不匹配："+item.name);
+  }
   const mediaMap=new Map();
   for(const item of (manifest.media||[])){
     const blob=mediaFiles.get(item.path);
-    if(!blob||!item.id)continue;
     const id="import-media-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-    await put("media",{id,blob,name:item.name||"imported-media",type:item.type||blob.type,size:item.size||blob.size,savedAt:item.savedAt||new Date().toISOString()});
+    await put("media",{id,blob,name:item.name||"imported-media",type:item.type||blob.type,size:blob.size,savedAt:item.savedAt||new Date().toISOString()});
     mediaMap.set(item.id,id);
   }
   let n=0;
@@ -134,6 +165,10 @@ async function importTarFile(file){
     if(!k||typeof k.title!=="string")continue;
     await put("knowledge",{...k,id:"import-k-"+Date.now().toString(36)+"-"+kCount+"-"+Math.random().toString(36).slice(2,6)});
     kCount++;
+  }
+  for(const setting of manifest.settings||[]){
+    if(!setting||typeof setting.id!=="string"||["ai-endpoint","ai-token","legacy-migrated"].includes(setting.id))continue;
+    await put("settings",setting);
   }
   return {records:n,media:mediaMap.size,knowledge:kCount};
 }
