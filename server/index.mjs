@@ -3,6 +3,8 @@ import multer from "multer";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { GoogleGenAI, createPartFromUri, createUserContent } from "@google/genai";
 import mammoth from "mammoth";
 import pdfParse from "pdf-parse";
@@ -45,6 +47,58 @@ async function qwenChat(content){
   return Array.isArray(value)?value.map(x=>x.text||"").join("\n"):String(value||"");
 }
 function modelName(){return provider()==="qwen"?(process.env.DASHSCOPE_MODEL||"qwen3.8-flash"):(process.env.GEMINI_MODEL||"gemini-3.8-flash");}
+function isPrivateAddress(address){
+  const family=isIP(address);
+  if(family===4){
+    const p=address.split(".").map(Number),[a,b]=p;
+    return a===0||a===10||a===127||(a===169&&b===254)||(a===172&&b>=16&&b<=31)||(a===192&&b===168)||(a===100&&b>=64&&b<=127)||(a===192&&b===0)||(a===192&&b===2)||(a===198&&(b===18||b===19))||(a===198&&b===51)||(a===203&&b===0)||(a>=224);
+  }
+  if(family===6){
+    const ip=address.toLowerCase();
+    return ip==="::"||ip==="::1"||ip.startsWith("::ffff:")||ip.startsWith("fc")||ip.startsWith("fd")||/^fe[89ab]/.test(ip)||ip.startsWith("ff")||ip.startsWith("2001:db8:")||ip.startsWith("2002:")||ip.startsWith("2001:0:");
+  }
+  return true;
+}
+async function assertPublicHttpUrl(raw){
+  let url;
+  try{url=new URL(raw);}catch{throw new Error("链接格式无效。");}
+  if(!["http:","https:"].includes(url.protocol))throw new Error("仅支持 HTTP 或 HTTPS 链接。");
+  if(url.username||url.password)throw new Error("不接受包含用户名或密码的链接。");
+  const host=url.hostname.toLowerCase().replace(/^\[|\]$/g,"").replace(/\.$/,"");
+  if(!host||host==="localhost"||/\.(localhost|local|internal|lan|home|test|invalid|example)$/.test(host))throw new Error("为保护服务端安全，不允许访问本机或内网地址。");
+  const family=isIP(host);
+  let addresses;
+  if(family)addresses=[{address:host}];
+  else{
+    try{addresses=await lookup(host,{all:true,verbatim:true});}
+    catch{throw new Error("无法解析该链接的公开域名。");}
+  }
+  if(!addresses.length||addresses.some(x=>isPrivateAddress(x.address)))throw new Error("为保护服务端安全，已拦截指向内网、保留地址或非公网 IP 的链接。");
+  return url;
+}
+async function fetchPublicPageText(raw){
+  let current=raw;
+  for(let hop=0;hop<=5;hop++){
+    await assertPublicHttpUrl(current);
+    const response=await fetch(current,{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html,text/plain;q=0.9,*/*;q=0.1"},redirect:"manual",signal:AbortSignal.timeout(15000)});
+    if(response.status>=300&&response.status<400){
+      const location=response.headers.get("location");
+      await response.body?.cancel().catch(()=>{});
+      if(!location)throw new Error("网页重定向缺少目标地址。");
+      if(hop===5)throw new Error("网页重定向次数过多。");
+      current=new URL(location,current).href;
+      continue;
+    }
+    if(!response.ok){await response.body?.cancel().catch(()=>{});return "";}
+    const type=response.headers.get("content-type")||"";
+    if(!/text\/html|text\/plain|application\/xhtml\+xml/i.test(type)){await response.body?.cancel().catch(()=>{});return "";}
+    return (await response.text()).slice(0,120000)
+      .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi," ")
+      .replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ").trim();
+  }
+  return "";
+}
+
 
 function client(){if(!process.env.GEMINI_API_KEY)throw new Error("服务端尚未配置 GEMINI_API_KEY。");return new GoogleGenAI({apiKey:process.env.GEMINI_API_KEY});}
 
@@ -115,15 +169,16 @@ app.post("/api/analyze",async(req,res)=>{
 app.post("/api/analyze-url",async(req,res)=>{
   try{
     const {url="",task="分析该马术视频来源页面",context=""}=req.body||{};
-    let parsed;try{parsed=new URL(url);}catch{return res.status(400).json({error:"视频链接格式无效。"});}
-    if(!["http:","https:"].includes(parsed.protocol))return res.status(400).json({error:"仅支持 HTTP 或 HTTPS 链接。"});
+    let parsed;
+    try{parsed=await assertPublicHttpUrl(url);}
+    catch(error){return res.status(400).json({error:error.message||"链接未通过安全检查。"});}
     if(provider()==="qwen"){
       if(/\.(mp4|mov|m4v|webm)(?:$|[?#])/i.test(parsed.pathname+parsed.search)){
         const output=await qwenChat([{type:"video_url",video_url:{url:parsed.href},fps:2},{type:"text",text:system+"\n任务："+task+"；背景："+context+"。按时间顺序分析马匹动作、骑手动作、节奏和路线，标记无法确认之处。"}]);
         return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
       }
       let pageText="";
-      try{const pr=await fetch(parsed.href,{headers:{"User-Agent":"Mozilla/5.0"},signal:AbortSignal.timeout(15000)});if(pr.ok){const raw=(await pr.text()).slice(0,120000);pageText=raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ").trim();}}catch{}
+      try{pageText=await fetchPublicPageText(parsed.href);}catch(error){console.warn("analyze-url page fetch blocked or failed:",error.message);}
       const output=await qwenChat("请分析该链接页面实际可访问的文字："+task+"。背景："+context+"。若无法读取视频画面或字幕，必须明确说明，不得假装看过视频。链接："+parsed.href+"\n页面文字："+(pageText||"服务端未能读取网页正文。"));
       return res.json({ok:true,provider:"qwen",model:modelName(),text:output});
     }
