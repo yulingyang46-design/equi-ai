@@ -46,7 +46,7 @@ async function qwenChat(content){
       const response=await fetch(base+"/chat/completions",{
         method:"POST",
         headers:{"Authorization":"Bearer "+process.env.DASHSCOPE_API_KEY,"Content-Type":"application/json"},
-        body:JSON.stringify({model:process.env.DASHSCOPE_MODEL||"qwen3.8-flash",messages:[{role:"system",content:system},{role:"user",content}]}),
+        body:JSON.stringify({model:process.env.DASHSCOPE_MODEL||"qwen-plus",messages:[{role:"system",content:system},{role:"user",content}]}),
         signal:AbortSignal.timeout(300000)
       });
       const body=await response.json().catch(()=>({}));
@@ -72,7 +72,7 @@ async function qwenChat(content){
   }
   throw new Error("国内 AI 请求连续失败（最多重试 3 次）：" + String(lastError?.message||"未知错误"));
 }
-function modelName(){return provider()==="qwen"?(process.env.DASHSCOPE_MODEL||"qwen3.8-flash"):(process.env.GEMINI_MODEL||"gemini-3.8-flash");}
+function modelName(){return provider()==="qwen"?(process.env.DASHSCOPE_MODEL||"qwen-plus"):(process.env.GEMINI_MODEL||"gemini-3.8-flash");}
 function isPrivateAddress(address){
   const family=isIP(address);
   if(family===4){
