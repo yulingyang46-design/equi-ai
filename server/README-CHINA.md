@@ -7,8 +7,9 @@
 设置服务端环境变量：
 - `AI_PROVIDER=qwen`
 - `DASHSCOPE_API_KEY=你的百炼 API Key`
-- `DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`（北京地域默认示例；API Key、模型、Base URL 必须属于同一地域/业务空间）
-- `DASHSCOPE_MODEL=qwen3.8-flash`
+- `DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`（通用北京地域示例；API Key、模型、Base URL 必须属于同一地域/业务空间）
+- `DASHSCOPE_BASE_URL=https://<你的工作空间ID>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`（工作空间专属地址示例；若使用此地址，必须与该工作空间创建的 Key 配套）
+- `DASHSCOPE_MODEL=qwen-plus`（首轮连通性测试推荐；确认模型在该业务空间可用后再切换其他模型）
 - `OSS_REGION=oss-cn-beijing`（示例，按 Bucket 实际地域填写）
 - `OSS_BUCKET=你的私有 Bucket 名称`
 - `OSS_ACCESS_KEY_ID=仅服务端使用的 RAM 访问密钥 ID`
@@ -18,7 +19,7 @@
 - `APP_ACCESS_TOKEN=自行生成的长随机令牌`
 - `ALLOWED_ORIGINS=`（按部署域名配置；不要把密钥写进 APK）
 
-如使用工作空间地域专属域名，请在百炼控制台确认工作空间 ID、地域与对应 API Key，并将完整 compatible-mode Base URL 配置到 `DASHSCOPE_BASE_URL`。
+你当前提供的工作空间专属兼容地址为：`https://ws-1mxrejc3x2h57szh.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。部署时将它作为 `DASHSCOPE_BASE_URL` 环境变量值；不要把 API Key 写入本文件、GitHub 或 APK。若该 Key 的类型/权限与工作空间专属地址不匹配，需在百炼控制台核对 Key 类型及调用文档，不能仅凭前缀推断。
 
 ## 已实现输入类型
 
